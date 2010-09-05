@@ -10,6 +10,8 @@
 #include <msgpack/rpc/server.h>
 #include <msgpack/rpc/client.h>
 
+#include "msgpack_macro.h"
+
 typedef std::string key;
 typedef std::string value;
 
@@ -29,22 +31,17 @@ struct settings: public singleton<settings>{
 		 myport(11011),myip(get_myip()),maxlevel(16){}
 };
 
-namespace msg{
-enum operation{
-	INFORM,
-	SET,
-	SET_OK,
-	SEARCH,
-	FOUND,
-	NOTFOUND,
-	RANGE,
-	RANGE_FOUND,
-	RANGE_NOTFOUND,
-	LINK,
-	TREAT,
-	INTRODUCE,
+struct host{
+	host(const std::string& name_, const uint16_t& port_)
+		:hostname(name_),port(port_){}
+	std::string hostname;
+	uint16_t port;
+	MSGPACK_DEFINE(hostname,port);
+private:
+	host();
 };
-}
+
+
 
 
 // node infomation
@@ -62,7 +59,10 @@ public:
 		return ad_;
 	}
 	struct hash {
-		size_t operator()(const neighbor& a);
+		size_t operator()(const neighbor& a)const {
+			return mp::hash<std::string>()(a.get_key()) +
+				msgpack::rpc::address::hash()(a.get_address());
+		};
 	};
 };
 
@@ -72,26 +72,22 @@ class range{
 public:
 	// construction
 	range():begin_(),end_(),border_begin_(false),border_end_(false){}
+	range(const range& org)
+		:begin_(org.begin_),
+		 end_(org.end_),
+		 border_begin_(org.border_begin_),
+		 border_end_(org.border_end_){}
 	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
 		:begin_(_begin),end_(_end),border_begin_(_border_begin),border_end_(_border_end){}
-	range(const range& org)
-		:begin_(org.begin_),end_(org.end_),
-		 border_begin_(org.border_begin_),border_end_(org.border_end_){}
-	range& operator=(const range& rhs){
-		begin_ = rhs.begin_;
-		end_ = rhs.end_;
-		border_begin_ = rhs.border_begin_;
-		border_end_ = rhs.border_end_;
-		return *this;
-	}
+
 	// checker
 	bool contain(const key& t)const{
-		if(begin_ == t && border_begin_) return true;
-		if(end_ == t && border_end_) return true;
-		if(begin_ < t && t < end_) return true;
-		return false;
-	}
-	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_);
+	if(begin_ == t && border_begin_) return true;
+	if(end_ == t && border_end_) return true;
+	if(begin_ < t && t < end_) return true;
+	return false;
+}
+	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
 };
 
 
@@ -161,11 +157,31 @@ namespace{
 }
 
 
-
-size_t neighbor::hash::operator()(const neighbor& a)
-{
-	return mp::hash<std::string>()(a.get_key()) +
-		msgpack::rpc::address::hash()(a.get_address());
+namespace msg{
+enum operation{
+	DIE,
+	DUMP,
+	INFORM,
+	SET,
+	SET_OK,
+	SEARCH,
+	FOUND,
+	NOTFOUND,
+	RANGE,
+	RANGE_FOUND,
+	RANGE_NOTFOUND,
+	LINK,
+	TREAT,
+	INTRODUCE,
 };
 
+}
+
+
 #endif
+
+
+
+
+
+
