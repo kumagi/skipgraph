@@ -1,0 +1,210 @@
+#ifndef SG_OBJECTS_HPP
+#define SG_OBJECTS_HPP
+#include <string>
+#include <stdint.h>
+
+#include <boost/noncopyable.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
+#include <boost/optional.hpp>
+#include <mp/sync.h>
+#include "msgpack/rpc/server.h"
+#include "msgpack/rpc/client.h"
+
+#include "objlib.h"
+#include "msgpack.hpp"
+
+struct host{
+	host(){}
+	host(const std::string& name_, const uint16_t& port_)
+		:hostname(name_),port(port_){}
+	std::string hostname;
+	uint16_t port;
+	MSGPACK_DEFINE(hostname,port);
+private:
+};
+
+typedef std::string key;
+typedef std::string value;
+
+
+// node infomation
+class neighbor {
+	key key_;
+	msgpack::rpc::address ad_;
+	//friend struct hash;
+public:
+	neighbor(const key& _key,const msgpack::rpc::address& _ad)
+		:key_(_key),ad_(_ad){}
+
+	// getter
+	const key& get_key()const{ return key_; }
+	const msgpack::rpc::address& get_address()const{ return ad_; }
+
+	
+	struct hash {
+		size_t operator()(const neighbor& a)const {
+			return mp::hash<std::string>()(a.get_key()) +
+				msgpack::rpc::address::hash()(a.get_address());
+		};
+	};
+};
+
+class range{
+	key begin_,end_;
+	bool border_begin_,border_end_; // true = contain, false = not
+public:
+	// construction
+	range():begin_(),end_(),border_begin_(false),border_end_(false){}
+	range(const range& org)
+		:begin_(org.begin_),
+		 end_(org.end_),
+		 border_begin_(org.border_begin_),
+		 border_end_(org.border_end_){}
+	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
+		:begin_(_begin),end_(_end),border_begin_(_border_begin),border_end_(_border_end){}
+
+	// checker
+	bool contain(const key& t)const{
+	if(begin_ == t && border_begin_) return true;
+	if(end_ == t && border_end_) return true;
+	if(begin_ < t && t < end_) return true;
+	return false;
+}
+	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
+};
+
+class sg_node;
+class membership_vector;
+
+struct shared_data: public singleton<shared_data>{
+	int maxlevel;
+	// initializer
+	shared_data():maxlevel(8){}
+	void init(){
+		ref_storage rs(storage); rs->clear();
+		ref_ng_map rn(ngmap); rn->clear();
+	}
+	// selfdata
+	host myhost;
+	void set_host(const std::string& name, const uint16_t& port){
+		myhost = host(name,port);
+	}
+	const host& get_host()const{return myhost;}
+	
+	
+	// storage
+	typedef std::map<key,sg_node> storage_t;
+	typedef mp::sync<storage_t> sync_storage_t;
+	typedef sync_storage_t::ref ref_storage;
+	sync_storage_t storage;
+	
+	// neighbors
+	typedef std::map<key, boost::weak_ptr<neighbor> > ng_map_t;
+	typedef mp::sync<ng_map_t> sync_ng_map_t;
+	typedef sync_ng_map_t::ref ref_ng_map;
+	sync_ng_map_t ngmap;
+	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+	
+};
+
+boost::shared_ptr<neighbor> shared_data::get_neighbor(const key& k, const host& h){
+	ref_ng_map ng(ngmap); // get lock
+	shared_data::ng_map_t::iterator it = ng->find(k);
+	boost::shared_ptr<neighbor> ans;
+	if(it == ng->end()){
+		ans = boost::shared_ptr<neighbor>
+			(new neighbor(k, msgpack::rpc::ip_address(h.hostname,h.port)));
+		ng->insert(std::make_pair(k,boost::weak_ptr<neighbor>(ans)));
+		return boost::shared_ptr<neighbor>(ans);
+	}else if(!(ans = it->second.lock())){
+		ng->erase(it);
+		ans = boost::shared_ptr<neighbor>
+			(new neighbor(k, msgpack::rpc::ip_address(h.hostname,h.port)));
+		ng->insert(std::make_pair(k,boost::weak_ptr<neighbor>(ans)));
+		return boost::shared_ptr<neighbor>(ans);
+	}else{
+		return boost::shared_ptr<neighbor>(it->second);
+	}
+}
+
+class sg_node{
+	value value_;
+	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
+public:
+	enum direction{
+		left = 0,
+		right = 1,
+	};
+	sg_node(const value& _value)
+		:value_(_value){
+		const int level = shared_data::instance().maxlevel;
+		next_keys[left].reserve(level);
+		next_keys[right].reserve(level);
+		for(int i=0;i<level;i++){
+			next_keys[left].push_back(boost::shared_ptr<const neighbor>());
+			next_keys[right].push_back(boost::shared_ptr<const neighbor>());
+		}
+	}
+	boost::shared_ptr<const neighbor>
+	search_nearest(const key& mykey,const key& target)const{
+		assert(mykey != target);
+		if(mykey < target){
+			for(int i = next_keys[left].size()-1; i>=0; --i){
+				if(next_keys[left][i] != NULL &&
+					 target < next_keys[left][i]->get_key())
+					return next_keys[left][i];
+			}
+		}else{
+			for(int i = next_keys[left].size()-1; i>=0; --i){
+				if(next_keys[left][i] != NULL &&
+					 next_keys[left][i]->get_key() < target)
+					return next_keys[right][i];
+			}
+		}
+		return boost::shared_ptr<const neighbor>();
+	}
+	
+	const std::string& get_value()const{ return value_;}
+	void set_value(const value& v){value_ = v;}
+	const std::vector<boost::shared_ptr<const neighbor> >* neighbors()const{
+		return next_keys;
+	}
+	void new_link(int level, direction left_or_right, const key& k,
+		const host& h){
+		{
+			next_keys[left_or_right][level] = shared_data::instance()
+				.get_neighbor(k,h);
+		}
+	}
+private:
+	sg_node();
+};
+typedef std::pair<key,sg_node> kvp;
+
+struct membership_vector{
+	uint64_t vector;
+	membership_vector(uint64_t v):vector(v){}
+	membership_vector():vector(){}
+	membership_vector(const membership_vector& org):vector(org.vector){}
+	int match(const membership_vector& o)const{
+		const uint64_t matched = ~(vector ^ o.vector);
+		uint64_t bit = 1;
+		int cnt = 0;
+		while((matched & bit) && cnt < 64){
+			bit *= 2;
+			cnt++;
+		}
+		return cnt;
+	}
+	void dump()const{
+		const char* bits = reinterpret_cast<const char*>(&vector);
+		for(int i=7;i>=0;--i){
+			fprintf(stderr,"%02x",(unsigned char)255&bits[i]);
+		}
+	}
+	MSGPACK_DEFINE(vector); // serialize and deserialize ok
+};
+
+#endif

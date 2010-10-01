@@ -173,7 +173,9 @@ unsigned int get_myip_interface2(const char* const name){
 	memset(&ifr, 0, sizeof(ifr));
 	strcpy(ifr.ifr_name, name);
 	if(ioctl(fd, SIOCGIFADDR, &ifr) < 0){
-		perror("ioctl(SIOCGIFADDR)");exit(1);
+		char buff[250];
+		sprintf(buff,"cannot use <%s> SIOCGIFADDR",ifr.ifr_name);
+		perror(buff);exit(1);
 	}
 	if(ioctl(fd, SIOCGIFADDR, &ifr) < 0){
 		perror("ioctl(SIOCGIFADDR)");exit(1);

@@ -1,5 +1,5 @@
-#include <msgpack/rpc/server.h>
-#include <msgpack/rpc/client.h>
+#include "msgpack/rpc/server.h"
+#include "msgpack/rpc/client.h"
 
 using namespace mp::placeholders;
 namespace rpc { using namespace msgpack::rpc; }
@@ -15,13 +15,11 @@ public:
 	// クライアントから要求を受け取ったら呼ばれる
 	void dispatch(rpc::request req)
 	{
-		std::string method = req.method().as<std::string>();
+		const std::string& method = req.method().as<std::string>();
 		msgpack::type::tuple<int, int> params(req.params());
 
-		// 別のサーバに処理を中継
 		rpc::session s = m_sp.get_session("127.0.0.1", 8080); 
 				
-		// コールバック呼び出し
 		s.call(method, params.get<0>(), params.get<1>())
 			.attach_callback( mp::bind(&callback, _1, req) );
 	}
@@ -35,7 +33,6 @@ public:
 
 public:
 	myserver() : m_sp(m_svr.get_loop()) { }	 // イベントループを共有
-		
 private:
 	msgpack::rpc::server m_svr;
 	msgpack::rpc::session_pool m_sp;

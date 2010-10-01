@@ -2,3 +2,10 @@
 skipgraph
 *~
 *.i
+GPATH
+GRTAGS
+GTAGS
+a.out
+*.S
+server
+logic_test

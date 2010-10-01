@@ -32,6 +32,7 @@ private:
 int main(void)
 {
 	myserver s;
+	
 	s.listen("0.0.0.0", 8080).start(4);		 // サーバを4スレッドで起動
 	sleep(10000);
 }
