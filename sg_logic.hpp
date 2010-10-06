@@ -91,11 +91,13 @@ void die(const msgpack::object&, server*){
 //	fprintf(stderr,"die called ok");
 	exit(0);
 };
+
 template <typename server>
 void set(const msgpack::object& obj, server* sv){
 	BLOCK("set");
 	msg::set arg(obj);
 	{
+		
 		shared_data::ref_storage st(shared_data::instance().storage);
 
 		typedef std::pair<shared_data::storage_t::iterator,bool> ret;
@@ -104,52 +106,66 @@ void set(const msgpack::object& obj, server* sv){
 		if(its.second == false){
 			st->erase(its.first);
 			st->insert(std::make_pair
-			(arg.set_key,sg_node(arg.set_value)));
+				(arg.set_key,sg_node(arg.set_value)));
 		}
+		
 		typedef shared_data::storage_t::iterator iter;
 		const iter org = its.first;
 		const iter left = --its.first;
-		its.first = org;
-		++its.first;
+		its.first = org; ++its.first;
 		const iter right = its.first;
 		
-		//assert(right == st->end());
-		//assert(right != st->end());
+		boost::optional<boost::shared_ptr<const neighbor> > nearest;
+		{ // get the nearest neighbor
+			boost::shared_ptr<const neighbor> lw,up;
+			if(left->first != org->first){// left key exists
+				lw = boost::shared_ptr<const neighbor>
+					(left->second.search_nearest(left->first, arg.set_key));
+			}
+			if(right != st->end()){// right key exists
+				up = boost::shared_ptr<const neighbor>
+					(right->second.search_nearest(right->first, arg.set_key));
+			}
 		
-		boost::shared_ptr<const neighbor> lw,up;
-		if(left->first != org->first){// left key exists
-			lw = boost::shared_ptr<const neighbor>
-				(left->second.search_nearest(left->first, arg.set_key));
-		}
-		if(right != st->end() && right->first != org->first){// right key exists
-			up = boost::shared_ptr<const neighbor>
-				(right->second.search_nearest(right->first, arg.set_key));
+			if(!!lw && !!up){
+				nearest = left_is_near(org->first, left->first, right->first) ?
+					lw : up;
+			}
+			else if(!!lw){ nearest = lw; }
+			else if(!!up){ nearest = up; }
 		}
 		
-		boost::optional<neighbor> nearest;
-		if(!!lw && !!up){
-			nearest = left_is_near(org->first, left->first, right->first) ?
-				*lw : *up;
-		}
-		else if(!!lw){ nearest = *lw; }
-		else if(!!up){ nearest = *up; }
+		const host& h = shared_data::instance().get_host();
 		if(nearest){
-			sv->get_session(nearest->get_address())
-				.notify("treat", arg.set_key, nearest->get_key(), 
-								shared_data::instance().myhost, membership_vector());
+			boost::shared_ptr<const neighbor> locked_nearest;
+			if(locked_nearest->get_host() != h){
+				sv->get_session(locked_nearest->get_address())
+					.notify("treat", arg.set_key, locked_nearest->get_key(), 
+									h, membership_vector());
+			}else{ // nearest is mine !
+				sg_node& node = st->find(arg.set_key)->second;
+				//assert(node != storage.end());
+				sg_node::direction left_or_right 
+					= locked_nearest->get_key() < arg.set_key 
+					? sg_node::right : sg_node::left;
+				for(size_t i=0; i < node.get_maxlevel(); ++i){
+					node.new_link
+						(i, left_or_right, arg.set_key, h);
+					its.first->second.new_link
+						(i, sg_node::inverse(left_or_right), arg.set_key, h);
+				}
+			}
+			sv->get_session(locked_nearest->get_address())
+				.notify("treat", arg.set_key, locked_nearest->get_key(), 
+								h, membership_vector());
+		}else {
+			
 		}
-
+		DEBUG_OUT(" key:%s  value:%s  stored. ",
+							arg.set_key.c_str(),arg.set_value.c_str());
 	}
-	{
-		shared_data::ref_ng_map ng(shared_data::instance().ngmap);
-		shared_data::ng_map_t::iterator lw = ng->lower_bound(arg.set_key);
-		shared_data::ng_map_t::iterator up = ng->upper_bound(arg.set_key);
-		
-		
-	}
-	DEBUG_OUT(" key:%s  value:%s  stored. ",
-		arg.set_key.c_str(),arg.set_value.c_str());
 };
+
 template <typename server>
 void search(const msgpack::object& obj, server* sv){
 	BLOCK("search:");
@@ -174,7 +190,7 @@ void search(const msgpack::object& obj, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > string_distance(node->first,arg.target_key)){
+				 org_distance > string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -188,13 +204,13 @@ void search(const msgpack::object& obj, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == sg_node::right))
-					)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
@@ -208,7 +224,7 @@ void search(const msgpack::object& obj, server* sv){
 					.notify("notfound",arg.target_key);
 			}
 		}
-	}else{
+	}else{ // found it
 		sv->get_session
 			(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
 			.notify("found",arg.target_key,node->second.get_value());
@@ -231,10 +247,9 @@ void notfound(const msgpack::object& obj, server*){
 }
 
 template <typename server>
-void link(const msgpack::object& obj,server* z){
+void link(const msgpack::object& obj,server*){
 	BLOCK("link:");
 	const msg::link arg(obj);
-
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
 		shared_data::storage_t& storage = *st;
@@ -245,6 +260,71 @@ void link(const msgpack::object& obj,server* z){
 			? sg_node::right : sg_node::left;
 		node.new_link
 			(arg.level, left_or_right, arg.origin_key,arg.origin);
+	}
+}
+template <typename server>
+void treat(const msgpack::object& obj, server* sv){
+	BLOCK("treat:");
+	msg::treat arg(obj);
+	
+	shared_data::ref_storage ref(shared_data::instance().storage);
+	shared_data::storage_t& storage = *ref;
+  
+	
+	shared_data::storage_t::const_iterator node = storage.find(arg.target_key);
+	if(node == storage.end()){ // this node does not have target key
+		node = storage.lower_bound(arg.target_key);
+		if(node == storage.end()){
+			node = storage.upper_bound(arg.target_key);
+			
+			sv->get_session
+				(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
+				.notify("notfound",arg.target_key);
+
+		}else{
+			const key& found_key = node->first;
+			int org_distance = string_distance(found_key,arg.target_key);
+			bool target_is_right = true;
+			++node;
+			if((node != storage.end()) && 
+				 org_distance > string_distance(node->first,arg.target_key)){
+				--node;
+			}else{
+				target_is_right = false;
+			}
+			
+			// search target
+			sg_node::direction left_or_right = target_is_right 
+				? sg_node::right : sg_node::left;
+			
+			int i;
+			assert(node->second.neighbors()[left_or_right].size() > 0);
+			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
+				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+						||
+						((node->second.neighbors()[left_or_right][i]->get_key() <
+							arg.target_key)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
+				){ // relay query
+					sv->get_session
+						(node->second.neighbors()[left_or_right][i]->get_address())
+						.notify("search",arg.target_key,i,arg.origin);
+					return;
+				}
+			}
+			if(i < 0){
+				sv->get_session
+					(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
+					.notify("notfound",arg.target_key);
+			}
+		}
+	}else{ // found it
+		sv->get_session
+			(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
+			.notify("found",arg.target_key,node->second.get_value());
 	}
 }
 

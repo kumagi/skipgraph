@@ -1,7 +1,7 @@
 CXX=g++
 OPTS=-O0 -fexceptions -g
 LD=-lboost_program_options -lmsgpack -lmpio 
-PATH_MSGPACK_RPC=/home/kumagi/work/msgpack-rpc/cpp/src/msgpack/rpc
+PATH_MSGPACK_RPC=../msgpack-rpc/cpp/src/msgpack/rpc
 TEST_LD= -lpthread $(LD)
 GTEST_INC= -I$(GTEST_DIR)/include -I$(GTEST_DIR)
 GTEST_DIR=/opt/google/gtest-1.5.0

@@ -3,6 +3,9 @@
 #include <string>
 #include <stdint.h>
 
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include <boost/noncopyable.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/shared_ptr.hpp>
@@ -21,6 +24,21 @@ struct host{
 		:hostname(name_),port(port_){}
 	std::string hostname;
 	uint16_t port;
+	msgpack::rpc::ip_address get_address()const{
+		return msgpack::rpc::ip_address(hostname,port);
+	}
+	static host get_host(const msgpack::rpc::ip_address& ad){
+		sockaddr_in addr;
+		ad.get_addr(reinterpret_cast<sockaddr*>(&addr));
+		in_addr ip = addr.sin_addr;
+		return host(inet_ntoa(ip), ad.get_port());
+	}
+	bool operator==(const host& rhs)const{
+		return hostname == rhs.hostname && port == rhs.port;
+	}
+	bool operator!=(const host& rhs)const{
+		return !(operator==(rhs));
+	}
 	MSGPACK_DEFINE(hostname,port);
 private:
 };
@@ -32,23 +50,24 @@ typedef std::string value;
 // node infomation
 class neighbor {
 	key key_;
-	msgpack::rpc::address ad_;
+	host ad_;
 	//friend struct hash;
 public:
-	neighbor(const key& _key,const msgpack::rpc::address& _ad)
+	neighbor(const key& _key,const host& _ad)
 		:key_(_key),ad_(_ad){}
 
 	// getter
 	const key& get_key()const{ return key_; }
-	const msgpack::rpc::address& get_address()const{ return ad_; }
+	const host& get_host()const{ return ad_; }
+	const msgpack::rpc::address get_address()const{ return ad_.get_address(); }
 
-	
+	/*
 	struct hash {
 		size_t operator()(const neighbor& a)const {
 			return mp::hash<std::string>()(a.get_key()) +
 				msgpack::rpc::address::hash()(a.get_address());
 		};
-	};
+		};*/
 };
 
 class range{
@@ -115,13 +134,13 @@ boost::shared_ptr<neighbor> shared_data::get_neighbor(const key& k, const host& 
 	boost::shared_ptr<neighbor> ans;
 	if(it == ng->end()){
 		ans = boost::shared_ptr<neighbor>
-			(new neighbor(k, msgpack::rpc::ip_address(h.hostname,h.port)));
+			(new neighbor(k, h));
 		ng->insert(std::make_pair(k,boost::weak_ptr<neighbor>(ans)));
 		return boost::shared_ptr<neighbor>(ans);
 	}else if(!(ans = it->second.lock())){
 		ng->erase(it);
 		ans = boost::shared_ptr<neighbor>
-			(new neighbor(k, msgpack::rpc::ip_address(h.hostname,h.port)));
+			(new neighbor(k, h));
 		ng->insert(std::make_pair(k,boost::weak_ptr<neighbor>(ans)));
 		return boost::shared_ptr<neighbor>(ans);
 	}else{
@@ -137,6 +156,9 @@ public:
 		left = 0,
 		right = 1,
 	};
+	static direction inverse(const direction d){
+		return static_cast<direction>(1 - static_cast<int>(d));
+	}
 	sg_node(const value& _value)
 		:value_(_value){
 		const int level = shared_data::instance().maxlevel;
@@ -177,6 +199,9 @@ public:
 			next_keys[left_or_right][level] = shared_data::instance()
 				.get_neighbor(k,h);
 		}
+	}
+	size_t get_maxlevel()const{
+		return next_keys[left].size();
 	}
 private:
 	sg_node();

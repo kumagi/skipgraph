@@ -9,6 +9,7 @@
 using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::ByRef;
+using ::testing::StrictMock;
 
 class mock_session{
 public:
@@ -17,6 +18,7 @@ public:
 	MOCK_METHOD2(notify,void(op& name,const key&));
 	MOCK_METHOD3(notify,void(op& name,const key&,const value&));
 	MOCK_METHOD4(notify,void(op& name,const key&,int,host));
+	MOCK_METHOD5(notify,void(op& name,const key&,const key&,const host&, const membership_vector&));
 };
 class mock_server{
 public:
@@ -24,12 +26,38 @@ public:
 	typedef mock_session session;
 };
 
-TEST(set, one){
+TEST(obj, host2addr){
+	using namespace msgpack::rpc;
+	host h("102.21.32.1",43);
+	ip_address a = h.get_address();
+	host i = host::get_host(a);
+	EXPECT_TRUE(h == i);
+	EXPECT_TRUE(std::string("102.21.32.1") == i.hostname);
+	EXPECT_EQ(i.port, 43);
+}
+
+TEST(set, firstkey){
+	shared_data::instance().init();
 	msg::set op("k1","v1");
 	msgpack::zone z;
 	msgpack::object obj;
 	op.msgpack_object(&obj,&z);
-	mock_server sv;
+	StrictMock<mock_server> sv;
+	mock_session sn;
+	
+	// call
+	logic::set(obj, &sv);
+	// check
+	shared_data::ref_storage st(shared_data::instance().storage);
+	EXPECT_TRUE(st->find("k1") != st->end());
+}
+TEST(set, secondkey){
+	msg::set op("k2","v2");
+	msgpack::zone z;
+	msgpack::object obj;
+	op.msgpack_object(&obj,&z);
+	StrictMock<mock_server> sv;
+	mock_session sn;
 	
 	// call
 	logic::set(obj, &sv);
@@ -39,7 +67,7 @@ TEST(set, one){
 }
 
 TEST(search, not_found){
-	msg::search op("k2", 8, host("127.0.0.1",9080));
+	msg::search op("notexist", 8, host("127.0.0.1",9080));
 	msgpack::zone z;
 	msgpack::object obj;
 	op.msgpack_object(&obj,&z);
@@ -47,7 +75,7 @@ TEST(search, not_found){
 	// expect
 	mock_server sv;
 	mock_session sn;
-	EXPECT_CALL(sn, notify(std::string("notfound"), key("k2")));
+	EXPECT_CALL(sn, notify(std::string("notfound"), key("notexist")));
 	EXPECT_CALL(sv, get_session(msgpack::rpc::ip_address("127.0.0.1",9080)))
 		.Times(1)
 		.WillOnce(ReturnRef(sn));
@@ -78,7 +106,7 @@ TEST(search, will_find){
 	// call
 	logic::search(obj, &sv);
 }
-
+/*
 TEST(link, all_level_equal){
 	shared_data::instance().init();
 	mock_server sv;
@@ -112,3 +140,4 @@ TEST(link, all_level_equal){
 	
 }
 
+*/

@@ -41,6 +41,8 @@ private:
 	sg_host();
 };
 
+#define REGIST(x) host.regist("##x##", logic::x<msgpack::rpc::server>)
+
 int main(int argc, char** argv){
 	settings& s = settings::instance();
 	
@@ -52,11 +54,12 @@ int main(int argc, char** argv){
 	sg_host host(&sg_server); // main callback
 
 	{// regist callbacks
-		host.regist("die", logic::die<msgpack::rpc::server>);
-		host.regist("set", logic::set<msgpack::rpc::server>);
-		host.regist("search", logic::search<msgpack::rpc::server>);
-		host.regist("found", logic::found<msgpack::rpc::server>);
-		host.regist("notfound", logic::notfound<msgpack::rpc::server>);
+		REGIST(die);
+		REGIST(search);
+		REGIST(found);
+		REGIST(notfound);
+		REGIST(link);
+		REGIST(treat);
 	}
 	sg_server.serve(&host);
 	sg_server.listen("127.0.0.1", s.myport);
