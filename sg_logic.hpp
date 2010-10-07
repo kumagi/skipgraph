@@ -138,26 +138,11 @@ void set(const msgpack::object& obj, server* sv){
 		const host& h = shared_data::instance().get_host();
 		if(nearest){
 			boost::shared_ptr<const neighbor> locked_nearest;
-			if(locked_nearest->get_host() != h){
-				sv->get_session(locked_nearest->get_address())
-					.notify("treat", arg.set_key, locked_nearest->get_key(), 
-									h, membership_vector());
-			}else{ // nearest is mine !
-				sg_node& node = st->find(arg.set_key)->second;
-				//assert(node != storage.end());
-				sg_node::direction left_or_right 
-					= locked_nearest->get_key() < arg.set_key 
-					? sg_node::right : sg_node::left;
-				for(size_t i=0; i < node.get_maxlevel(); ++i){
-					node.new_link
-						(i, left_or_right, arg.set_key, h);
-					its.first->second.new_link
-						(i, sg_node::inverse(left_or_right), arg.set_key, h);
-				}
-			}
+			assert(locked_nearest->get_host() != h);
+			
 			sv->get_session(locked_nearest->get_address())
 				.notify("treat", arg.set_key, locked_nearest->get_key(), 
-								h, membership_vector());
+					h, membership_vector());
 		}else {
 			
 		}
