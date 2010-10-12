@@ -11,7 +11,6 @@
 using namespace mp::placeholders;
 namespace rpc { using namespace msgpack::rpc; }
 
-
 #include "sg_logic.hpp"
 
 class sg_host : public msgpack::rpc::dispatcher, public boost::noncopyable{
@@ -22,7 +21,7 @@ public:
 		// get the name of method
 		const std::string& method = req.method().as<std::string>();
 		// call the method
-		bool success = ref_table.call(method, req.params(), m_sv);
+		bool success = ref_table.call(method, &req, m_sv);
 		if(!success){ 
 			std::cerr << "undefined function ["
 								<< method << "] called" << std::endl;

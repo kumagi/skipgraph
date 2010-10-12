@@ -26,6 +26,15 @@ public:
 	typedef mock_session session;
 };
 
+class mock_request{
+public:
+	MOCK_METHOD1(result, void(const msgpack::object& res));
+	MOCK_METHOD2(result, void(const msgpack::object& res,
+			msgpack::rpc::auto_zone z));
+	MOCK_METHOD2(result, void(const msgpack::object& res,
+			msgpack::rpc::shared_zone z));
+};
+
 TEST(obj, host2addr){
 	using namespace msgpack::rpc;
 	host h("102.21.32.1",43);
@@ -44,6 +53,7 @@ TEST(set, firstkey){
 	op.msgpack_object(&obj,&z);
 	StrictMock<mock_server> sv;
 	mock_session sn;
+	
 	
 	// call
 	logic::set(obj, &sv);

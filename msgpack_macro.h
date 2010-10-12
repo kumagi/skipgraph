@@ -1,4 +1,4 @@
-#ifndef MSGPACK_MACRO_H
+#ifndef MSGPACK_MACRO_Hp
 #define MSGPACK_MACRO_H
 
 #define RPC_OPERATION1(NAME, type1, arg1)\
@@ -12,7 +12,7 @@
 	};\
 	}																							\
 	namespace logic{\
-	template<typename server> void NAME(const msgpack::object& obj, server* sv); \
+	template<typename server> void NAME(msgpack::rpc::request* obj, server* sv); \
 	}
 
 #define RPC_OPERATION2(NAME, type1, arg1, type2, arg2)\
@@ -27,7 +27,7 @@
 	};\
 	}\
 	namespace logic{\
-	template<typename server> void NAME(const msgpack::object& obj, server* sv); \
+	template<typename server> void NAME(msgpack::rpc::request* obj, server* sv); \
 	}
 
 #define RPC_OPERATION3(NAME, type1, arg1, type2, arg2, type3, arg3)\
@@ -43,7 +43,7 @@
 	};\
 	}\
 	namespace logic{\
-	template<typename server> void NAME(const msgpack::object& obj, server* sv); \
+	template<typename server> void NAME(msgpack::rpc::request* obj, server* sv); \
 	}
 
 #define RPC_OPERATION4(NAME, type1, arg1, type2, arg2, type3, arg3,type4,arg4) \
@@ -60,7 +60,7 @@
 	};\
 	}																							\
 	namespace logic{\
-	template<typename server> void NAME(const msgpack::object& obj, server* sv); \
+	template<typename server> void NAME(msgpack::rpc::request* obj, server* sv); \
 	}
 
 #define RPC_OPERATION5(NAME, type1, arg1, type2, arg2, type3, arg3,type4, arg4, type5, arg5) \
@@ -78,7 +78,7 @@
 	};\
 	}																							\
 	namespace logic{\
-	template<typename server> void NAME(const msgpack::object& obj, server* sv); \
+	template<typename server> void NAME(msgpack::rpc::request* obj, server* sv); \
 	}
 
 #endif
