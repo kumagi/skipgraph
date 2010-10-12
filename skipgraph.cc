@@ -40,7 +40,8 @@ private:
 	sg_host();
 };
 
-#define REGIST(x) host.regist("##x##", logic::x<msgpack::rpc::server>)
+#define REGIST(x) \
+	host.regist("##x##", logic::x<msgpack::rpc::request, msgpack::rpc::server>)
 
 int main(int argc, char** argv){
 	settings& s = settings::instance();

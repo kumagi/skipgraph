@@ -81,7 +81,6 @@ const key& which_near(const key& org, const key& lhs, const key& rhs){
 
 namespace logic{
 
-
 namespace detail{
 typedef shared_data::storage_t::iterator st_iter;
 using boost::optional;
@@ -119,17 +118,17 @@ get_nearest_node(const key& k){
 		return &*lr_pair.second;
 }
 } // namespace detail
-template <typename server>
-void die(msgpack::rpc::request*, server*){
+template <typename request, typename server>
+void die(request*, server*){
 	REACH("die:");
 //	fprintf(stderr,"die called ok");
 	exit(0);
 };
 
-template <typename server>
-void set(msgpack::rpc::request* obj, server* sv){
+template <typename request, typename server>
+void set(request* req, server* sv){
 	BLOCK("set");
-	msg::set arg(obj->params());
+	msg::set arg(req->params());
 	const host& h = shared_data::instance().get_host();
 	{
 		const std::pair<const key,sg_node>* nearest
@@ -150,12 +149,13 @@ void set(msgpack::rpc::request* obj, server* sv){
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
 			arg.set_key.c_str(),arg.set_value.c_str());
 	}
+
 };
 
-template <typename server>
-void search(msgpack::rpc::request* obj, server* sv){
+template <typename request, typename server>
+void search(request* req, server* sv){
 	BLOCK("search:");
-	msg::search arg(obj->params());
+	msg::search arg(req->params());
 		
 	shared_data::ref_storage ref(shared_data::instance().storage);
 	shared_data::storage_t& storage = *ref;
@@ -217,25 +217,25 @@ void search(msgpack::rpc::request* obj, server* sv){
 	}
 }
 
-template <typename server>
-void found(msgpack::rpc::request* obj, server*){
+template <typename request, typename server>
+void found(request* req, server*){
 	BLOCK("found:");
-	const msg::found arg(obj->params());
+	const msg::found arg(req->params());
 	std::cerr << "key:" <<
 		arg.found_key << " & value:" << arg.found_value << " " << std::endl;
 }
-template <typename server>
-void notfound(msgpack::rpc::request* obj, server*){
+template <typename request, typename server>
+void notfound(request* req, server*){
 	BLOCK("found:");
-	const msg::notfound arg(obj->params());
+	const msg::notfound arg(req->params());
 	std::cerr << "key:" <<
 		arg.target_key << " " << std::endl;
 }
 
-template <typename server>
-void link(msgpack::rpc::request* obj,server*){
+template <typename request, typename server>
+void link(request* req,server*){
 	BLOCK("link:");
-	const msg::link arg(obj->params());
+	const msg::link arg(req->params());
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
 		shared_data::storage_t& storage = *st;
@@ -248,10 +248,10 @@ void link(msgpack::rpc::request* obj,server*){
 			(arg.level, left_or_right, arg.origin_key,arg.origin);
 	}
 }
-template <typename server>
-void treat(msgpack::rpc::request* obj, server* sv){
+template <typename request, typename server>
+void treat(request* req, server* sv){
 	BLOCK("treat:");
-	msg::treat arg(obj->params());
+	msg::treat arg(req->params());
 	
 	shared_data::ref_storage ref(shared_data::instance().storage);
 	shared_data::storage_t& storage = *ref;

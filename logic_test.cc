@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "sg_objects.hpp"
+#include "obj_eval.hpp"
 #include <assert.h>
 
 #define NEVER_REACH EXPECT_TRUE(false)
@@ -20,6 +21,7 @@ public:
 	MOCK_METHOD4(notify,void(op& name,const key&,int,host));
 	MOCK_METHOD5(notify,void(op& name,const key&,const key&,const host&, const membership_vector&));
 };
+
 class mock_server{
 public:
 	MOCK_METHOD1(get_session,mock_session&(const msgpack::rpc::address&));
@@ -29,12 +31,16 @@ public:
 class mock_request{
 public:
 	MOCK_METHOD1(result, void(const msgpack::object& res));
+	/*
 	MOCK_METHOD2(result, void(const msgpack::object& res,
 			msgpack::rpc::auto_zone z));
 	MOCK_METHOD2(result, void(const msgpack::object& res,
 			msgpack::rpc::shared_zone z));
+	*/
+	MOCK_METHOD0(params, const msgpack::object&());
 };
 
+// ordinary lib
 TEST(obj, host2addr){
 	using namespace msgpack::rpc;
 	host h("102.21.32.1",43);
@@ -45,22 +51,27 @@ TEST(obj, host2addr){
 	EXPECT_EQ(i.port, 43);
 }
 
+// skipgraph logic
 TEST(set, firstkey){
 	shared_data::instance().init();
-	msg::set op("k1","v1");
+	msg::set arg("k1","v1");
 	msgpack::zone z;
 	msgpack::object obj;
-	op.msgpack_object(&obj,&z);
+	arg.msgpack_object(&obj,&z);
 	StrictMock<mock_server> sv;
 	mock_session sn;
-	
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj));
 	
 	// call
-	logic::set(obj, &sv);
+	logic::set(&req, &sv);
 	// check
 	shared_data::ref_storage st(shared_data::instance().storage);
 	EXPECT_TRUE(st->find("k1") != st->end());
 }
+
+/*
 TEST(set, secondkey){
 	msg::set op("k2","v2");
 	msgpack::zone z;
@@ -70,7 +81,7 @@ TEST(set, secondkey){
 	mock_session sn;
 	
 	// call
-	logic::set(obj, &sv);
+	logic::set(&obj, &sv);
 	// check
 	shared_data::ref_storage st(shared_data::instance().storage);
 	EXPECT_TRUE(st->find("k1") != st->end());
@@ -86,12 +97,12 @@ TEST(search, not_found){
 	mock_server sv;
 	mock_session sn;
 	EXPECT_CALL(sn, notify(std::string("notfound"), key("notexist")));
-	EXPECT_CALL(sv, get_session(msgpack::rpc::ip_address("127.0.0.1",9080)))
+	EXPECT_CALL(sv, get_sessiopppn(msgpack::rpc::ip_address("127.0.0.1",9080)))
 		.Times(1)
 		.WillOnce(ReturnRef(sn));
 	
 	// calld
-	logic::search(obj, &sv);
+	logic::search(&obj, &sv);
 }
 
 TEST(search, will_find){
@@ -111,12 +122,11 @@ TEST(search, will_find){
 	msg::set set_op("k3","set");
 	msgpack::object setter;
 	set_op.msgpack_object(&setter,&z);
-	logic::set(setter,&sv);
+	logic::set(&setter,&sv);
 	
 	// call
-	logic::search(obj, &sv);
+	logic::search(&obj, &sv);
 }
-/*
 TEST(link, all_level_equal){
 	shared_data::instance().init();
 	mock_server sv;

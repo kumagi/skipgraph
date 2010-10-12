@@ -12,11 +12,12 @@ NOTIFY=&& notify-send Test success! -i ~/themes/ok_icon.png || notify-send Test 
 SRCS=$(HEADS) $(BODYS)
 MSGPACK_RPC_OBJS=$(PATH_MSGPACK_RPC)/*.o
 
-target:skipgraph
+#target:skipgraph
 target:logic_test
 target:testclient
+target:obj_eval.i
 
-skipgraph: skipgraph.o tcp_wrap.o sg_logic.o
+skipgraph: skipgraph.o tcp_wrap.o
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
 logic_test: sg_logic.o logic_test.o gtest_main.a libgmock.a
 	$(CXX) $^ -o $@ $(GTEST_INC) $(TEST_LD) $(OPTS) $(WARNS) $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
@@ -30,14 +31,15 @@ server:server.cpp
 server2:server2.cpp
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) $(PATH_MSGPACK_RPC)/*.o 
 
-sg_logic.o: sg_logic.cc sg_logic.hpp
-	$(CXX) -c sg_logic.cc -o $@ $(OPTS) $(WARNS)
 skipgraph.o:skipgraph.cc skipgraph.h tcp_wrap.h sg_logic.hpp debug_macro.h sg_objects.hpp
 	$(CXX) -c skipgraph.cc -o $@ $(OPTS) $(WARNS) -I$(PATH_MSGPACK_RPC)
 logic_test.o: logic_test.cc sg_logic.hpp sg_objects.hpp
 	$(CXX) -c logic_test.cc $(OPTS) $(WARNS)
 tcp_wrap.o:tcp_wrap.cpp
 	$(CXX) -c $^ -o $@ $(OPTS) $(WARNS)
+
+obj_eval.i: obj_eval.hpp
+	$(CXX) -E obj_eval.hpp -o $@
 
 #%.o: %.c
 #	$(CXX) -c $(OPTS) $(WARNS) $< -o $@
