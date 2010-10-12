@@ -9,3 +9,4 @@ a.out
 *.S
 server
 logic_test
+*.a

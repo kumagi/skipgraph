@@ -31,18 +31,18 @@ namespace{
 		typename msgpack::type::tuple<BOOST_PP_ENUM_PARAMS(n,A)> tuple(BOOST_PP_ENUM_PARAMS(n,a)); \
 		msgpack::pack(&sb, tuple);																									\
 		obj = msgpack::unpack(sb.data(),sb.size(),z,NULL);				\
-}\
+	}\
 	const typename msgpack::object& get()const{return obj;}\
 private:\
-	msgpack::sbuffer sb;													\
+	msgpack::sbuffer sb;\
 	msgpack::zone z;																\
 	msgpack::object obj;\
 };
-//		BOOST_PP_ENUM_TRAILING(BOOST_PP_SUB(MAX_PARAMS,n),TEXT,void)>{	
+
 }
 
 namespace eval{
-#define MAX_PARAMS 8
+#define MAX_PARAMS 4
 
 #define RPT2EVL(ignore1,param,ignore2) EVAL_OBJECT(param)
 EVAL_OBJECT_PARENT(MAX_PARAMS)
@@ -55,4 +55,5 @@ BOOST_PP_REPEAT_FROM_TO_D(5,1,MAX_PARAMS,RPT2EVL,43)
 #undef TEXT
 #undef ARG
 #undef MAX_PARAMS
+#undef RPT2EVL
 #endif

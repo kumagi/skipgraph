@@ -15,11 +15,11 @@ MSGPACK_RPC_OBJS=$(PATH_MSGPACK_RPC)/*.o
 #target:skipgraph
 target:logic_test
 target:testclient
-target:obj_eval.i
+#target:obj_eval.i
 
 skipgraph: skipgraph.o tcp_wrap.o
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
-logic_test: sg_logic.o logic_test.o gtest_main.a libgmock.a
+logic_test: logic_test.o gtest_main.a libgmock.a
 	$(CXX) $^ -o $@ $(GTEST_INC) $(TEST_LD) $(OPTS) $(WARNS) $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
 	./logic_test $(NOTIFY)
 testclient: testclient.cpp
@@ -38,8 +38,8 @@ logic_test.o: logic_test.cc sg_logic.hpp sg_objects.hpp
 tcp_wrap.o:tcp_wrap.cpp
 	$(CXX) -c $^ -o $@ $(OPTS) $(WARNS)
 
-obj_eval.i: obj_eval.hpp
-	$(CXX) -E obj_eval.hpp -o $@
+#obj_eval.i: obj_eval.hpp
+#	$(CXX) -E obj_eval.hpp -o $@
 
 #%.o: %.c
 #	$(CXX) -c $(OPTS) $(WARNS) $< -o $@

@@ -30,13 +30,12 @@ public:
 
 class mock_request{
 public:
+	MOCK_METHOD0(zone, msgpack::rpc::auto_zone&() );
 	MOCK_METHOD1(result, void(const msgpack::object& res));
-	/*
-	MOCK_METHOD2(result, void(const msgpack::object& res,
-			msgpack::rpc::auto_zone z));
 	MOCK_METHOD2(result, void(const msgpack::object& res,
 			msgpack::rpc::shared_zone z));
-	*/
+	MOCK_METHOD1(result, void(bool));
+
 	MOCK_METHOD0(params, const msgpack::object&());
 };
 
@@ -56,13 +55,12 @@ TEST(set, firstkey){
 	shared_data::instance().init();
 	
 	eval::object<key,value> obj("k1","v1");
-	const msgpack::object param = obj.get();
 
 	StrictMock<mock_server> sv;
-	StrictMock<mock_session> sn;
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
-		.WillOnce(ReturnRef(param));
+		.WillOnce(ReturnRef(obj.get()));
+	EXPECT_CALL(req, result(1));
 	
 	// call
 	logic::set(&req, &sv);

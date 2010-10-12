@@ -133,8 +133,10 @@ void set(request* req, server* sv){
 	{
 		const std::pair<const key,sg_node>* nearest
 			= detail::get_nearest_node(arg.set_key);
-		if(nearest != NULL){
-			if(nearest->first == arg.set_key){
+		if(nearest != NULL){ // something found!
+			if(nearest->first == arg.set_key){ // already exist
+				
+				req->result(true);
 			}
 			boost::shared_ptr<const neighbor> locked_nearest
 				= nearest->second.search_nearest(nearest->first,arg.set_key);
@@ -143,8 +145,10 @@ void set(request* req, server* sv){
 			sv->get_session(locked_nearest->get_address())
 				.notify("treat", arg.set_key, locked_nearest->get_key(), 
 					h, membership_vector());
-		}else {
-			
+		}else { // not found == it's first key!
+			shared_data::ref_storage st(shared_data::instance().storage);
+			st->insert(std::make_pair(arg.set_key,arg.set_value));
+			req->result(true);
 		}
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
 			arg.set_key.c_str(),arg.set_value.c_str());
