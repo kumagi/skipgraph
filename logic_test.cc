@@ -54,15 +54,15 @@ TEST(obj, host2addr){
 // skipgraph logic
 TEST(set, firstkey){
 	shared_data::instance().init();
-	msg::set arg("k1","v1");
-	msgpack::zone z;
-	msgpack::object obj;
-	arg.msgpack_object(&obj,&z);
+	
+	eval::object<key,value> obj("k1","v1");
+	const msgpack::object param = obj.get();
+
 	StrictMock<mock_server> sv;
-	mock_session sn;
+	StrictMock<mock_session> sn;
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
-		.WillOnce(ReturnRef(obj));
+		.WillOnce(ReturnRef(param));
 	
 	// call
 	logic::set(&req, &sv);

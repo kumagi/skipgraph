@@ -128,7 +128,7 @@ void die(request*, server*){
 template <typename request, typename server>
 void set(request* req, server* sv){
 	BLOCK("set");
-	msg::set arg(req->params());
+	const msg::set arg(req->params());
 	const host& h = shared_data::instance().get_host();
 	{
 		const std::pair<const key,sg_node>* nearest
