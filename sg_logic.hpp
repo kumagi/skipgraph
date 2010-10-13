@@ -86,12 +86,18 @@ void set(request* req, server* sv){
 				req->result(true);
 				return;
 			}else{ // other node -> relay
+				// search nearest
 				boost::shared_ptr<const neighbor> locked_nearest
 					= nearest->second.search_nearest(nearest->first,arg.set_key);
-				
-				sv->get_session(locked_nearest->get_address())
-					.notify("treat", arg.set_key, locked_nearest->get_key(), 
-						h, membership_vector());
+				if(locked_nearest){
+					sv->get_session(locked_nearest->get_address())
+						.notify("treat", arg.set_key, locked_nearest->get_key(), 
+							h, membership_vector());
+				}else{ // no key in the direction
+					shared_data::ref_storage st(shared_data::instance().storage);
+					st->insert(std::make_pair(arg.set_key,arg.set_value));
+					req->result(true);
+				}
 			}
 		}else { // not found == it's first key!
 			shared_data::ref_storage st(shared_data::instance().storage);
@@ -99,7 +105,7 @@ void set(request* req, server* sv){
 			req->result(true);
 		}
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
-			arg.set_key.c_str(),arg.set_value.c_str());
+							arg.set_key.c_str(),arg.set_value.c_str());
 	}
 };
 
@@ -127,7 +133,7 @@ void search(request* req, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > detail::string_distance(node->first,arg.target_key)){
+				 org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -141,13 +147,13 @@ void search(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == sg_node::right))
-					)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
@@ -224,7 +230,7 @@ void treat(request* req, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > detail::string_distance(node->first,arg.target_key)){
+				 org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -238,13 +244,13 @@ void treat(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == sg_node::right))
-					)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())

@@ -15,11 +15,12 @@ using ::testing::StrictMock;
 class mock_session{
 public:
 	typedef const std::string op;
-	MOCK_METHOD2(notify,void(op& name,const msgpack::object&));
-	MOCK_METHOD2(notify,void(op& name,const key&));
-	MOCK_METHOD3(notify,void(op& name,const key&,const value&));
-	MOCK_METHOD4(notify,void(op& name,const key&,int,host));
-	MOCK_METHOD5(notify,void(op& name,const key&,const key&,const host&, const membership_vector&));
+	MOCK_METHOD2(notify,void(op&,const msgpack::object&));
+	MOCK_METHOD2(notify,void(op&,const key&));
+	MOCK_METHOD3(notify,void(op&,const key&,const value&));
+	MOCK_METHOD4(notify,void(op&,const key&,int,host));
+	MOCK_METHOD5(notify,void(op&,const key&,const key&,const host&, const membership_vector&));
+	MOCK_METHOD5(notify,void(op&,const key&,int,const key&, const host&));
 };
 
 class mock_server{
@@ -59,6 +60,10 @@ TEST(obj, host2addr){
  * skipgraph logic
  * ---------------
  */
+
+// alias
+const host& myhost = shared_data::instance().get_host();
+
 TEST(set, firstkey){
 	shared_data::instance().init();
 	
@@ -76,18 +81,57 @@ TEST(set, firstkey){
 		shared_data::ref_storage st(shared_data::instance().storage);
 		EXPECT_TRUE(st->find("k1") != st->end());
 	}
-	EXPECT_FALSE(logic::detail::get_nearest_node("k") == NULL);
+	EXPECT_FALSE(logic::detail::get_nearest_node("k0") == NULL);
 	EXPECT_FALSE(logic::detail::get_nearest_node("k2") == NULL);
 }
 
+const host mockhost("hogeIP",11212); //host
+TEST(treat, to_firstkey){
+	/*
+		k1  
+		k1  
+		k1  [k2]<=new!
+	 */
+	
+	// request's input/output
+	// treat operation
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		st->find("k1")->second.set_vector(membership_vector(1));
+	}
+	eval::object<key,key,host,membership_vector> obj("k2","k1",mockhost, membership_vector(3));
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+
+}
+/*
 TEST(set, secondkey){
-	eval::object<key,value> obj("k2","v2");
-	StrictMock<mock_server> sv;
-	StrictMock<mock_session> sn;
+	
+		k1  [k2] k2 is other node's key
+		k1  [k2] 
+		k1  [k2]  k3<=new!
+ 
+	// request's input/output
+	eval::object<key,value> obj("k3","v3");
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
 	EXPECT_CALL(req, result(true));
+
+	// set [k2] as other node's key
+	
+	
+	const host& h = shared_data::instance().get_host();
+	
+	StrictMock<mock_session> sn;	
+	for(int i=0; i< maxlevel; i++){
+		EXPECT_CALL(sn, notify(std::string("link"), key("k2"), i, "k1", h));
+		EXPECT_CALL(sn, notify(std::string("link"), key("k2"), i, "k3", h));
+	}
+
+	
+	StrictMock<mock_server> sv;
 	
 	// call
 	logic::set(&req, &sv);
@@ -95,15 +139,16 @@ TEST(set, secondkey){
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
 		EXPECT_TRUE(st->find("k1") != st->end());
-		EXPECT_TRUE(st->find("k2") != st->end());
+		EXPECT_TRUE(st->find("k3") != st->end());
 	}
 }
+*/
 /*
-TEST(search, not_found){
-	msg::search op("notexist", 8, host("127.0.0.1",9080));
-	msgpack::zone z;
-	msgpack::object obj;
-	op.msgpack_object(&obj,&z);
+TEST(set, thirdkey){
+
+
+	eval::object<key,value> obj("k2","v2");
+	
 
 	// expect
 	mock_server sv;
@@ -116,7 +161,7 @@ TEST(search, not_found){
 	// calld
 	logic::search(&obj, &sv);
 }
-
+	
 TEST(search, will_find){
 	msg::search op("k3", 8, host("127.0.0.1",9080));
 	msgpack::zone z;

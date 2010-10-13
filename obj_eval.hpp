@@ -42,7 +42,7 @@ private:\
 }
 
 namespace eval{
-#define MAX_PARAMS 4
+#define MAX_PARAMS 8
 
 #define RPT2EVL(ignore1,param,ignore2) EVAL_OBJECT(param)
 EVAL_OBJECT_PARENT(MAX_PARAMS)

@@ -43,6 +43,31 @@ struct host{
 private:
 };
 
+
+struct membership_vector{
+	uint64_t vector;
+	explicit membership_vector(uint64_t v):vector(v){}
+	membership_vector():vector(0){}
+	int match(const membership_vector& o)const{
+		const uint64_t matched = ~(vector ^ o.vector);
+		uint64_t bit = 1;
+		int cnt = 0;
+		while((matched & bit) && cnt < 64){
+			bit *= 2;
+			cnt++;
+		}
+		return cnt;
+	}
+	void dump()const{
+		const char* bits = reinterpret_cast<const char*>(&vector);
+		for(int i=7;i>=0;--i){
+			fprintf(stderr,"%02x",(unsigned char)255&bits[i]);
+		}
+	}
+	MSGPACK_DEFINE(vector); // serialize and deserialize ok
+};
+
+
 typedef std::string key;
 typedef std::string value;
 
@@ -95,7 +120,6 @@ public:
 };
 
 class sg_node;
-class membership_vector;
 
 struct shared_data: public singleton<shared_data>{
 	int maxlevel;
@@ -110,34 +134,39 @@ struct shared_data: public singleton<shared_data>{
 	void set_host(const std::string& name, const uint16_t& port){
 		myhost = host(name,port);
 	}
-	const host& get_host()const{return myhost;}
- 
-	void storage_dump()const;
-	
-	// storage
-	typedef std::map<key,sg_node> storage_t;
-	typedef mp::sync<storage_t> sync_storage_t;
-	typedef sync_storage_t::ref ref_storage;
-	sync_storage_t storage;
-	
-	// neighbors
-	typedef std::map<key, boost::weak_ptr<neighbor> > ng_map_t;
-	typedef mp::sync<ng_map_t> sync_ng_map_t;
-	typedef sync_ng_map_t::ref ref_ng_map;
-	sync_ng_map_t ngmap;
-	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
-	
-};
+	 const host& get_host()const{return myhost;}
+
+	 void storage_dump()const;
+
+	 // storage
+	 typedef std::map<key,sg_node> storage_t;
+	 typedef mp::sync<storage_t> sync_storage_t;
+	 typedef sync_storage_t::ref ref_storage;
+	 sync_storage_t storage;
+
+	 // neighbors
+	 typedef std::map<key, boost::weak_ptr<neighbor> > ng_map_t;
+	 typedef mp::sync<ng_map_t> sync_ng_map_t;
+	 typedef sync_ng_map_t::ref ref_ng_map;
+	 sync_ng_map_t ngmap;
+	 boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+
+ };
 
 
 class sg_node{
 	value value_;
 	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
+	membership_vector vec;
 public:
 	enum direction{
 		left = 0,
 		right = 1,
 	};
+	void set_vector(const membership_vector& mv){
+		vec = mv;
+	}
+	const membership_vector& get_vector()const{ return vec;}
 	static direction inverse(const direction d){
 		return static_cast<direction>(1 - static_cast<int>(d));
 	}
@@ -157,8 +186,8 @@ public:
 		direction dir = mykey < target ? right : left;
 		for(int i = next_keys[dir].size()-1; i>=0; --i){
 			if(next_keys[dir][i] != NULL && (
-				 (target < next_keys[dir][i]->get_key() && dir == left) ||
-				 (next_keys[dir][i]->get_key() < target && dir == right)
+					 (target < next_keys[dir][i]->get_key() && dir == left) ||
+					 (next_keys[dir][i]->get_key() < target && dir == right)
 				 )
 			){
 				return next_keys[dir][i];
@@ -189,28 +218,5 @@ private:
 typedef std::pair<key,sg_node> kvp;
 
 
-struct membership_vector{
-	uint64_t vector;
-	membership_vector(uint64_t v):vector(v){}
-	membership_vector():vector(){}
-	membership_vector(const membership_vector& org):vector(org.vector){}
-	int match(const membership_vector& o)const{
-		const uint64_t matched = ~(vector ^ o.vector);
-		uint64_t bit = 1;
-		int cnt = 0;
-		while((matched & bit) && cnt < 64){
-			bit *= 2;
-			cnt++;
-		}
-		return cnt;
-	}
-	void dump()const{
-		const char* bits = reinterpret_cast<const char*>(&vector);
-		for(int i=7;i>=0;--i){
-			fprintf(stderr,"%02x",(unsigned char)255&bits[i]);
-		}
-	}
-	MSGPACK_DEFINE(vector); // serialize and deserialize ok
-};
 
 #endif
