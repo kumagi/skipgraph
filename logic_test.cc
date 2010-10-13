@@ -39,7 +39,10 @@ public:
 	MOCK_METHOD0(params, const msgpack::object&());
 };
 
-// ordinary lib
+/* ---------------
+ * ordinary lib
+ * ---------------
+ */
 TEST(obj, host2addr){
 	using namespace msgpack::rpc;
 	host h("102.21.32.1",43);
@@ -50,17 +53,19 @@ TEST(obj, host2addr){
 	EXPECT_EQ(i.port, 43);
 }
 
-// skipgraph logic
+/* ---------------
+ * skipgraph logic
+ * ---------------
+ */
 TEST(set, firstkey){
 	shared_data::instance().init();
 	
 	eval::object<key,value> obj("k1","v1");
-
 	StrictMock<mock_server> sv;
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
-	EXPECT_CALL(req, result(1));
+	EXPECT_CALL(req, result(true));
 	
 	// call
 	logic::set(&req, &sv);
@@ -69,22 +74,32 @@ TEST(set, firstkey){
 	EXPECT_TRUE(st->find("k1") != st->end());
 }
 
-/*
 TEST(set, secondkey){
-	msg::set op("k2","v2");
-	msgpack::zone z;
-	msgpack::object obj;
-	op.msgpack_object(&obj,&z);
+	eval::object<key,value> obj("k2","v2");
 	StrictMock<mock_server> sv;
-	mock_session sn;
-	
+	StrictMock<mock_session> sn;
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+	EXPECT_CALL(req, result(true));
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		shared_data::storage_t::iterator iter = st->lower_bound("k1");
+		assert(iter == st->end());
+		if(iter == st->end()) {
+			iter = st->upper_bound("k1");
+			assert(iter == st->end());
+		}
+	}
 	// call
-	logic::set(&obj, &sv);
+	logic::set(&req, &sv);
 	// check
 	shared_data::ref_storage st(shared_data::instance().storage);
 	EXPECT_TRUE(st->find("k1") != st->end());
-}
+	EXPECT_TRUE(st->find("k2") != st->end());
 
+}
+/*
 TEST(search, not_found){
 	msg::search op("notexist", 8, host("127.0.0.1",9080));
 	msgpack::zone z;

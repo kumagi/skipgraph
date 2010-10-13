@@ -7,7 +7,7 @@
 
 namespace debugmode{
 class block :boost::noncopyable{
-	const std::string message;
+	mutable std::string message;
 public:
 	block(const std::string& msg):message(msg){
 		std::cerr << "start[" << message << "]";

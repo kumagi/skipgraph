@@ -16,6 +16,7 @@
 #include "msgpack.hpp"
 
 #include "objlib.h"
+#include "logic_detail.hpp"
 
 typedef std::string key;
 typedef std::string value;
@@ -58,66 +59,9 @@ RPC_OPERATION4(treat, key, org_key, key, target_key, host,
 							 origin, membership_vector, org_vector);
 RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
 							 membership_vector, org_vector, int, level);
-
-int string_distance(const std::string& lhs, const std::string& rhs){
-	int len = lhs.length();
-	for(int i=0;i<len;++i){
-		if(lhs[i] != rhs[i]) return std::abs(lhs[i] - rhs[i]);
-	}
-	return 0;
-}
-bool left_is_near(const key& org, const key& lhs, const key& rhs){
-	return string_distance(org,lhs) < string_distance(org, rhs);
-}
-key& which_near(const key& org,key& lhs, key& rhs){
-	return left_is_near(org,lhs,rhs)
-		? lhs : rhs;
-}
-const key& which_near(const key& org, const key& lhs, const key& rhs){
-	return left_is_near(org,lhs,rhs)
-		? lhs : rhs;
-}
-
-
 namespace logic{
 
-namespace detail{
-typedef shared_data::storage_t::iterator st_iter;
-using boost::optional;
 
-std::pair<st_iter, st_iter>
-it_and_next(const st_iter& org){
-	st_iter next = org;
-	return std::make_pair(org,++next);
-}
-
-const std::pair<const key,sg_node>*
-get_nearest_node(const key& k){
-	typedef const optional<sg_node> result;
-	shared_data::ref_storage st(shared_data::instance().storage);
-	
-	st_iter iter = st->lower_bound(k);
-	if(iter == st->end()) { // most left data
-		iter = st->upper_bound(k);
-		if(iter == st->end()) {return NULL;}
-		else{return &*iter;}
-	}else if(iter->first == k){
-		return &*iter;
-	}
-	
-	const std::pair<st_iter, st_iter> lr_pair
-		= it_and_next(iter);
-	
-	if(lr_pair.second == st->end()){// next key exists
-		return &*lr_pair.first;
-	}
-	
-	if(left_is_near(k, lr_pair.first->first, lr_pair.second->first))
-		return &*lr_pair.first;
-	else
-		return &*lr_pair.second;
-}
-} // namespace detail
 template <typename request, typename server>
 void die(request*, server*){
 	REACH("die:");
@@ -135,23 +79,29 @@ void set(request* req, server* sv){
 			= detail::get_nearest_node(arg.set_key);
 		if(nearest != NULL){ // something found!
 			if(nearest->first == arg.set_key){ // already exist
-				
+				shared_data::ref_storage st(shared_data::instance().storage);
+				//(*st)[arg.set_key] = arg.set_value;
+				st->erase(arg.set_key);
+				st->insert(std::make_pair(arg.set_key,arg.set_value));
 				req->result(true);
-			}
-			boost::shared_ptr<const neighbor> locked_nearest
-				= nearest->second.search_nearest(nearest->first,arg.set_key);
-			assert(locked_nearest->get_host() != h);
+				return;
+			}else{ // other node -> relay
+				boost::shared_ptr<const neighbor> locked_nearest
+					= nearest->second.search_nearest(nearest->first,arg.set_key);
+				assert(locked_nearest->get_host() != h);
 			
-			sv->get_session(locked_nearest->get_address())
-				.notify("treat", arg.set_key, locked_nearest->get_key(), 
-					h, membership_vector());
+				sv->get_session(locked_nearest->get_address())
+					.notify("treat", arg.set_key, locked_nearest->get_key(), 
+									h, membership_vector());
+				
+			}
 		}else { // not found == it's first key!
 			shared_data::ref_storage st(shared_data::instance().storage);
 			st->insert(std::make_pair(arg.set_key,arg.set_value));
 			req->result(true);
 		}
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
-			arg.set_key.c_str(),arg.set_value.c_str());
+							arg.set_key.c_str(),arg.set_value.c_str());
 	}
 
 };
@@ -176,11 +126,11 @@ void search(request* req, server* sv){
 
 		}else{
 			const key& found_key = node->first;
-			int org_distance = string_distance(found_key,arg.target_key);
+			int org_distance = detail::string_distance(found_key,arg.target_key);
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > string_distance(node->first,arg.target_key)){
+				 org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -194,13 +144,13 @@ void search(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == sg_node::right))
-					)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
@@ -273,11 +223,11 @@ void treat(request* req, server* sv){
 
 		}else{
 			const key& found_key = node->first;
-			int org_distance = string_distance(found_key,arg.target_key);
+			int org_distance = detail::string_distance(found_key,arg.target_key);
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > string_distance(node->first,arg.target_key)){
+				 org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -291,13 +241,13 @@ void treat(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == sg_node::right))
-					)
+						 ^
+						 (left_or_right == sg_node::right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
