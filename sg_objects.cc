@@ -19,3 +19,23 @@ boost::shared_ptr<neighbor> shared_data::get_neighbor(const key& k, const host& 
 		return boost::shared_ptr<neighbor>(it->second);
 	}
 }
+
+std::ostream& operator<<(std::ostream& ost, const sg_node& node)
+{
+	return ost << node.get_value();
+}
+static std::ostream& operator<<(std::ostream& ost, const std::pair<key, sg_node>& kvp){
+	ost << " key:" << kvp.first << " value:" << kvp.second;
+	return ost;
+}
+
+void shared_data::storage_dump()const{
+	ref_storage st(shared_data::instance().storage);
+	storage_t::iterator it = st->begin();
+	std::cout << "dump[";
+	while(it != st->end()){
+		std::cout << *it;
+		++it;
+	}
+	std::cout << "]";
+}

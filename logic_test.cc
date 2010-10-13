@@ -39,6 +39,8 @@ public:
 	MOCK_METHOD0(params, const msgpack::object&());
 };
 
+#define STORAGE_DUMP {shared_data::instance().storage_dump();}
+
 /* ---------------
  * ordinary lib
  * ---------------
@@ -70,8 +72,12 @@ TEST(set, firstkey){
 	// call
 	logic::set(&req, &sv);
 	// check
-	shared_data::ref_storage st(shared_data::instance().storage);
-	EXPECT_TRUE(st->find("k1") != st->end());
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		EXPECT_TRUE(st->find("k1") != st->end());
+	}
+	EXPECT_FALSE(logic::detail::get_nearest_node("k") == NULL);
+	EXPECT_FALSE(logic::detail::get_nearest_node("k2") == NULL);
 }
 
 TEST(set, secondkey){
@@ -82,22 +88,15 @@ TEST(set, secondkey){
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
 	EXPECT_CALL(req, result(true));
-	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		shared_data::storage_t::iterator iter = st->lower_bound("k1");
-		assert(iter == st->end());
-		if(iter == st->end()) {
-			iter = st->upper_bound("k1");
-			assert(iter == st->end());
-		}
-	}
+	
 	// call
 	logic::set(&req, &sv);
 	// check
-	shared_data::ref_storage st(shared_data::instance().storage);
-	EXPECT_TRUE(st->find("k1") != st->end());
-	EXPECT_TRUE(st->find("k2") != st->end());
-
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		EXPECT_TRUE(st->find("k1") != st->end());
+		EXPECT_TRUE(st->find("k2") != st->end());
+	}
 }
 /*
 TEST(search, not_found){

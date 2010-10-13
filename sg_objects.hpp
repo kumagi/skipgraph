@@ -86,11 +86,11 @@ public:
 
 	// checker
 	bool contain(const key& t)const{
-	if(begin_ == t && border_begin_) return true;
-	if(end_ == t && border_end_) return true;
-	if(begin_ < t && t < end_) return true;
-	return false;
-}
+		if(begin_ == t && border_begin_) return true;
+		if(end_ == t && border_end_) return true;
+		if(begin_ < t && t < end_) return true;
+		return false;
+	}
 	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
 };
 
@@ -111,7 +111,8 @@ struct shared_data: public singleton<shared_data>{
 		myhost = host(name,port);
 	}
 	const host& get_host()const{return myhost;}
-	
+ 
+	void storage_dump()const;
 	
 	// storage
 	typedef std::map<key,sg_node> storage_t;
@@ -153,17 +154,14 @@ public:
 	boost::shared_ptr<const neighbor>
 	search_nearest(const key& mykey,const key& target)const{
 		assert(mykey != target);
-		if(mykey < target){
-			for(int i = next_keys[left].size()-1; i>=0; --i){
-				if(next_keys[left][i] != NULL &&
-					 target < next_keys[left][i]->get_key())
-					return next_keys[left][i];
-			}
-		}else{
-			for(int i = next_keys[left].size()-1; i>=0; --i){
-				if(next_keys[left][i] != NULL &&
-					 next_keys[left][i]->get_key() < target)
-					return next_keys[right][i];
+		direction dir = mykey < target ? right : left;
+		for(int i = next_keys[dir].size()-1; i>=0; --i){
+			if(next_keys[dir][i] != NULL && (
+				 (target < next_keys[dir][i]->get_key() && dir == left) ||
+				 (next_keys[dir][i]->get_key() < target && dir == right)
+				 )
+			){
+				return next_keys[dir][i];
 			}
 		}
 		return boost::shared_ptr<const neighbor>();
@@ -175,7 +173,7 @@ public:
 		return next_keys;
 	}
 	void new_link(int level, direction left_or_right, const key& k,
-		const host& h){
+								const host& h){
 		{
 			next_keys[left_or_right][level] = shared_data::instance()
 				.get_neighbor(k,h);
@@ -184,10 +182,12 @@ public:
 	size_t get_maxlevel()const{
 		return next_keys[left].size();
 	}
+	//friend std::ostream& operator<<()
 private:
 	sg_node();
 };
 typedef std::pair<key,sg_node> kvp;
+
 
 struct membership_vector{
 	uint64_t vector;

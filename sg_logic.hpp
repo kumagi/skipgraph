@@ -24,48 +24,48 @@ typedef std::string value;
 template <typename Server> 
 class reflection{
 public:
-	typedef typename boost::function <void
-		(msgpack::rpc::request*, Server*)> reaction;
-	typedef std::map<std::string, reaction> table;
-private:
-	table func_table;
-public:
-	void regist(const std::string& name, reaction func){
-		assert(func_table.find(name) == func_table.end());
-		typedef std::pair<typename table::iterator, bool> its;
-		its it = func_table.insert(std::make_pair(name,func));
-		assert(it.second != false && "double insertion");
-	}
-	bool call(const std::string& name, msgpack::rpc::request* req,
-						Server* sv)const{
-		typename table::const_iterator it = func_table.find(name);
-		if(it == func_table.end()) return false;
-		it->second(req,sv);
-		return true;
-	}
-	//const name_to_func* get_table_ptr(void)const{return &table;};
-};
+	 typedef typename boost::function <void
+		 (msgpack::rpc::request*, Server*)> reaction;
+	 typedef std::map<std::string, reaction> table;
+ private:
+	 table func_table;
+ public:
+	 void regist(const std::string& name, reaction func){
+		 assert(func_table.find(name) == func_table.end());
+		 typedef std::pair<typename table::iterator, bool> its;
+		 its it = func_table.insert(std::make_pair(name,func));
+		 assert(it.second != false && "double insertion");
+	 }
+	 bool call(const std::string& name, msgpack::rpc::request* req,
+						 Server* sv)const{
+		 typename table::const_iterator it = func_table.find(name);
+		 if(it == func_table.end()) return false;
+		 it->second(req,sv);
+		 return true;
+	 }
+	 //const name_to_func* get_table_ptr(void)const{return &table;};
+ };
 
-RPC_OPERATION1(die, std::string, name);
-RPC_OPERATION2(set, key, set_key, value, set_value);
-RPC_OPERATION4(link, key, target_key, int, level, key, origin_key, host, origin);
-RPC_OPERATION3(search, key, target_key, int, level, host, origin);
-RPC_OPERATION2(found, key, found_key, value, found_value);
-RPC_OPERATION1(notfound, key, target_key);
-RPC_OPERATION2(range_search, range, target_range, host, origin);
-RPC_OPERATION3(range_found, range, target_range, std::vector<key>,keys, std::vector<value>,values);
-RPC_OPERATION2(range_notfound, range, target_range, std::vector<key>, keys);
-RPC_OPERATION4(treat, key, org_key, key, target_key, host,
-							 origin, membership_vector, org_vector);
-RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
-							 membership_vector, org_vector, int, level);
+ RPC_OPERATION1(die, std::string, name);
+ RPC_OPERATION2(set, key, set_key, value, set_value);
+ RPC_OPERATION4(link, key, target_key, int, level, key, origin_key, host, origin);
+ RPC_OPERATION3(search, key, target_key, int, level, host, origin);
+ RPC_OPERATION2(found, key, found_key, value, found_value);
+ RPC_OPERATION1(notfound, key, target_key);
+ RPC_OPERATION2(range_search, range, target_range, host, origin);
+ RPC_OPERATION3(range_found, range, target_range, std::vector<key>,keys, std::vector<value>,values);
+ RPC_OPERATION2(range_notfound, range, target_range, std::vector<key>, keys);
+ RPC_OPERATION4(treat, key, org_key, key, target_key, host,
+								origin, membership_vector, org_vector);
+ RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
+								membership_vector, org_vector, int, level);
 namespace logic{
 
 
 template <typename request, typename server>
 void die(request*, server*){
 	REACH("die:");
-//	fprintf(stderr,"die called ok");
+	//	fprintf(stderr,"die called ok");
 	exit(0);
 };
 
@@ -88,12 +88,10 @@ void set(request* req, server* sv){
 			}else{ // other node -> relay
 				boost::shared_ptr<const neighbor> locked_nearest
 					= nearest->second.search_nearest(nearest->first,arg.set_key);
-				assert(locked_nearest->get_host() != h);
-			
+				
 				sv->get_session(locked_nearest->get_address())
 					.notify("treat", arg.set_key, locked_nearest->get_key(), 
-									h, membership_vector());
-				
+						h, membership_vector());
 			}
 		}else { // not found == it's first key!
 			shared_data::ref_storage st(shared_data::instance().storage);
@@ -101,16 +99,15 @@ void set(request* req, server* sv){
 			req->result(true);
 		}
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
-							arg.set_key.c_str(),arg.set_value.c_str());
+			arg.set_key.c_str(),arg.set_value.c_str());
 	}
-
 };
 
 template <typename request, typename server>
 void search(request* req, server* sv){
 	BLOCK("search:");
 	msg::search arg(req->params());
-		
+	
 	shared_data::ref_storage ref(shared_data::instance().storage);
 	shared_data::storage_t& storage = *ref;
   
@@ -130,7 +127,7 @@ void search(request* req, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				 org_distance > detail::string_distance(node->first,arg.target_key)){
+				org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -144,13 +141,13 @@ void search(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-						 ^
-						 (left_or_right == sg_node::right))
-					 )
+							^
+							(left_or_right == sg_node::right))
+					)
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
@@ -227,7 +224,7 @@ void treat(request* req, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				 org_distance > detail::string_distance(node->first,arg.target_key)){
+				org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -241,13 +238,13 @@ void treat(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-						 ^
-						 (left_or_right == sg_node::right))
-					 )
+							^
+							(left_or_right == sg_node::right))
+					)
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())

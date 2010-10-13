@@ -1,5 +1,6 @@
 #include "logic_detail.hpp"
 #include <map>
+#include <boost/utility.hpp>
 
 namespace logic{namespace detail{
 
@@ -34,14 +35,16 @@ get_nearest_node(const key& k){
 	shared_data::ref_storage st(shared_data::instance().storage);
 	
 	st_iter iter = st->lower_bound(k);
-	if(iter == st->end()) { // most left data
+	if(iter == st->end()) { // most left data or biggest data
 		iter = st->upper_bound(k);
-		if(iter == st->end()) {return NULL;}
-		else{return &*iter;}
+		if(iter == st->end()) { // biggest data
+			if(st->size() == 0){ return NULL;}
+			else{return &*boost::prior(st->end());}
+		}else{return &*iter;}
 	}else if(iter->first == k){
 		return &*iter;
 	}
-	
+
 	const std::pair<st_iter, st_iter> lr_pair
 		= it_and_next(iter);
 	
