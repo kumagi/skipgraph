@@ -167,6 +167,9 @@ public:
 		vec = mv;
 	}
 	const membership_vector& get_vector()const{ return vec;}
+	static direction get_direction(const key& lhs, const key& rhs){
+		return (lhs < rhs) ? left : right;
+	}
 	static direction inverse(const direction d){
 		return static_cast<direction>(1 - static_cast<int>(d));
 	}

@@ -15,8 +15,8 @@ using boost::optional;
 std::pair<st_iter, st_iter>
 it_and_next(const st_iter& org);
 
-const std::pair<const key,sg_node>*
-get_nearest_node(const key& k);
+std::pair<const key,sg_node>* get_nearest_node(const key& k);
 } // namespace detail
 } // namespace logic
 #endif
+

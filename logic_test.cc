@@ -11,15 +11,23 @@ using ::testing::Return;
 using ::testing::ReturnRef;
 using ::testing::ByRef;
 using ::testing::StrictMock;
+using ::testing::AtLeast;
+using ::testing::_;
 
 class mock_session{
 public:
 	typedef const std::string op;
-	MOCK_METHOD2(notify,void(op&,const msgpack::object&));
+	// die
+	// MOCK_METHOD2(notify,void(op&,const msgpack::object&));
+	// not found
 	MOCK_METHOD2(notify,void(op&,const key&));
+	// set, found
 	MOCK_METHOD3(notify,void(op&,const key&,const value&));
-	MOCK_METHOD4(notify,void(op&,const key&,int,host));
+	// search
+	MOCK_METHOD4(notify,void(op&,const key&,int,const host&));
+	// treat
 	MOCK_METHOD5(notify,void(op&,const key&,const key&,const host&, const membership_vector&));
+	// link
 	MOCK_METHOD5(notify,void(op&,const key&,int,const key&, const host&));
 };
 
@@ -36,8 +44,13 @@ public:
 	MOCK_METHOD2(result, void(const msgpack::object& res,
 			msgpack::rpc::shared_zone z));
 	MOCK_METHOD1(result, void(bool));
-
 	MOCK_METHOD0(params, const msgpack::object&());
+};
+
+class mock_host{
+public:
+	MOCK_METHOD0(get_address, msgpack::rpc::address());
+	
 };
 
 #define STORAGE_DUMP {shared_data::instance().storage_dump();}
@@ -62,7 +75,7 @@ TEST(obj, host2addr){
  */
 
 // alias
-const host& myhost = shared_data::instance().get_host();
+const host& localhost = shared_data::instance().get_host();
 
 TEST(set, firstkey){
 	shared_data::instance().init();
@@ -85,11 +98,11 @@ TEST(set, firstkey){
 	EXPECT_FALSE(logic::detail::get_nearest_node("k2") == NULL);
 }
 
-const host mockhost("hogeIP",11212); //host
+const host mockhost("133.21.1.1",11212); //host
 TEST(treat, to_firstkey){
 	/*
 		k1  
-		k1  
+		k1  [k2]
 		k1  [k2]<=new!
 	 */
 	
@@ -99,11 +112,31 @@ TEST(treat, to_firstkey){
 		shared_data::ref_storage st(shared_data::instance().storage);
 		st->find("k1")->second.set_vector(membership_vector(1));
 	}
-	eval::object<key,key,host,membership_vector> obj("k2","k1",mockhost, membership_vector(3));
+	eval::object<key,key,host,membership_vector> 
+		obj("k2","k1",mockhost, membership_vector(3));
+	
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
+	
+	StrictMock<mock_session> ssn;
+	EXPECT_CALL(ssn, notify("link", "k2", 0, "k1", localhost));
+	EXPECT_CALL(ssn, notify("link", "k2", 1, "k1", localhost));
 
+	StrictMock<mock_server> sv;
+	EXPECT_CALL(sv, get_session(mockhost.get_address()))
+		.Times(2)
+		.WillRepeatedly(ReturnRef(ssn));
+	
+	// call
+	logic::treat(&req, &sv);
+
+	// check
+		STORAGE_DUMP;
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		assert(st->find("k1")->second.neighbors()[sg_node::right][0]);
+	}
 }
 /*
 TEST(set, secondkey){
@@ -154,7 +187,7 @@ TEST(set, thirdkey){
 	mock_server sv;
 	mock_session sn;
 	EXPECT_CALL(sn, notify(std::string("notfound"), key("notexist")));
-	EXPECT_CALL(sv, get_sessiopppn(msgpack::rpc::ip_address("127.0.0.1",9080)))
+	EXPECT_CALL(sv, get_session(msgpack::rpc::ip_address("127.0.0.1",9080)))
 		.Times(1)
 		.WillOnce(ReturnRef(sn));
 	

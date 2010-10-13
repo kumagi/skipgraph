@@ -30,7 +30,7 @@ it_and_next(const st_iter& org){
 	return std::make_pair(org,++next);
 }
 
-const std::pair<const key,sg_node>*
+std::pair<const key,sg_node>*
 get_nearest_node(const key& k){
 	shared_data::ref_storage st(shared_data::instance().storage);
 	

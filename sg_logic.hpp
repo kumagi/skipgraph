@@ -60,6 +60,7 @@ public:
  RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
 								membership_vector, org_vector, int, level);
 namespace logic{
+const host& h = shared_data::instance().get_host();
 
 
 template <typename request, typename server>
@@ -73,7 +74,6 @@ template <typename request, typename server>
 void set(request* req, server* sv){
 	BLOCK("set");
 	const msg::set arg(req->params());
-	const host& h = shared_data::instance().get_host();
 	{
 		const std::pair<const key,sg_node>* nearest
 			= detail::get_nearest_node(arg.set_key);
@@ -92,7 +92,7 @@ void set(request* req, server* sv){
 				if(locked_nearest){
 					sv->get_session(locked_nearest->get_address())
 						.notify("treat", arg.set_key, locked_nearest->get_key(), 
-							h, membership_vector());
+										h, membership_vector());
 				}else{ // no key in the direction
 					shared_data::ref_storage st(shared_data::instance().storage);
 					st->insert(std::make_pair(arg.set_key,arg.set_value));
@@ -205,76 +205,49 @@ void link(request* req,server*){
 			(arg.level, left_or_right, arg.origin_key,arg.origin);
 	}
 }
+
 template <typename request, typename server>
 void treat(request* req, server* sv){
 	BLOCK("treat:");
 	msg::treat arg(req->params());
 	
-	shared_data::ref_storage ref(shared_data::instance().storage);
-	shared_data::storage_t& storage = *ref;
-  
+	std::pair<const key,sg_node>* nearest
+		= detail::get_nearest_node(arg.org_key);
 	
-	shared_data::storage_t::const_iterator node = storage.find(arg.target_key);
-	if(node == storage.end()){ // this node does not have target key
-		node = storage.lower_bound(arg.target_key);
-		if(node == storage.end()){
-			node = storage.upper_bound(arg.target_key);
-			
-			sv->get_session
-				(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
-				.notify("notfound",arg.target_key);
-
+	if(nearest == NULL) return; // I have no key. it is 
+	{
+		if(nearest->first == arg.org_key){ // already exist in local -> introduce to both
+			// FIXME
 		}else{
-			const key& found_key = node->first;
-			int org_distance = detail::string_distance(found_key,arg.target_key);
-			bool target_is_right = true;
-			++node;
-			if((node != storage.end()) && 
-				 org_distance > detail::string_distance(node->first,arg.target_key)){
-				--node;
+			
+			boost::shared_ptr<const neighbor> locked_nearest
+				= nearest->second.search_nearest(nearest->first,arg.org_key);
+			if(locked_nearest){
+				/*
+				sv->get_session(locked_nearest->get_address())
+					.notify("treat", arg.org_key, locked_nearest->get_key(), 
+									h, arg.org_vector);
+				*/
 			}else{
-				target_is_right = false;
-			}
-			
-			// search target
-			sg_node::direction left_or_right = target_is_right 
-				? sg_node::right : sg_node::left;
-			
-			int i;
-			assert(node->second.neighbors()[left_or_right].size() > 0);
-			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
-				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
-						||
-						((node->second.neighbors()[left_or_right][i]->get_key() <
-							arg.target_key)
-						 ^
-						 (left_or_right == sg_node::right))
-					 )
-				){ // relay query
-					sv->get_session
-						(node->second.neighbors()[left_or_right][i]->get_address())
-						.notify("search",arg.target_key,i,arg.origin);
-					return;
+				const membership_vector my_mv = nearest->second.get_vector();
+				const int matches = my_mv.match(arg.org_vector);
+				fprintf(stderr,"mached #%d#\n",matches);
+				sg_node::direction dir =
+					sg_node::get_direction(nearest->first, arg.org_key);
+				for(int i=0; i <= matches && 
+							i < shared_data::instance().maxlevel; ++i){
+					sv->get_session(arg.origin.get_address())
+						.notify("link", arg.org_key, i,
+										nearest->first, h);
+					nearest->second.new_link
+						(i, sg_node::inverse(dir) , arg.org_key, arg.origin);
 				}
 			}
-			if(i < 0){
-				sv->get_session
-					(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
-					.notify("notfound",arg.target_key);
-			}
 		}
-	}else{ // found it
-		sv->get_session
-			(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
-			.notify("found",arg.target_key,node->second.get_value());
 	}
+	
 }
 
 
 }
 #endif
-
-
-
-
