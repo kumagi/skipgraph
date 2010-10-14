@@ -64,6 +64,8 @@ struct membership_vector{
 			fprintf(stderr,"%02x",(unsigned char)255&bits[i]);
 		}
 	}
+	bool operator==(const membership_vector& rhs)const
+	{ return vector == rhs.vector;}
 	MSGPACK_DEFINE(vector); // serialize and deserialize ok
 };
 
@@ -120,6 +122,8 @@ public:
 };
 
 class sg_node;
+struct suspended_node;
+
 
 struct shared_data: public singleton<shared_data>{
 	int maxlevel;
@@ -134,47 +138,65 @@ struct shared_data: public singleton<shared_data>{
 	void set_host(const std::string& name, const uint16_t& port){
 		myhost = host(name,port);
 	}
-	 const host& get_host()const{return myhost;}
+	const host& get_host()const{return myhost;}
 
-	 void storage_dump()const;
+	void storage_dump()const;
 
-	 // storage
-	 typedef std::map<key,sg_node> storage_t;
-	 typedef mp::sync<storage_t> sync_storage_t;
-	 typedef sync_storage_t::ref ref_storage;
-	 sync_storage_t storage;
+	// storage
+	typedef std::map<key,sg_node> storage_t;
+	typedef mp::sync<storage_t> sync_storage_t;
+	typedef sync_storage_t::ref ref_storage;
+	sync_storage_t storage;
 
-	 // neighbors
-	 typedef std::map<key, boost::weak_ptr<neighbor> > ng_map_t;
-	 typedef mp::sync<ng_map_t> sync_ng_map_t;
-	 typedef sync_ng_map_t::ref ref_ng_map;
-	 sync_ng_map_t ngmap;
-	 boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+	// neighbors
+	typedef boost::unordered_map<key, boost::weak_ptr<neighbor> > ng_map_t;
+	typedef mp::sync<ng_map_t> sync_ng_map_t;
+	typedef sync_ng_map_t::ref ref_ng_map;
+	sync_ng_map_t ngmap;
+	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+	
+	// susupended storage
+	typedef boost::unordered_map<key, suspended_node> suspended_t;
+	typedef mp::sync<suspended_t> sync_suspended_t;
+	typedef sync_suspended_t::ref ref_suspended;
+	sync_suspended_t suspended;
+	
+	// membership_vector
+	membership_vector myvector;
+};
 
- };
-
+struct suspended_node{
+	value value_;
+	membership_vector vec_;
+	bool con[2];
+	explicit suspended_node(const value& v, const membership_vector& mv)
+		:value_(v),vec_(mv){
+		con[0] = false, con[1] = false;
+	}
+};
 
 class sg_node{
 	value value_;
 	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
-	membership_vector vec;
+	membership_vector vec_;
 public:
 	enum direction{
 		left = 0,
 		right = 1,
 	};
 	void set_vector(const membership_vector& mv){
-		vec = mv;
+		vec_ = mv;
 	}
-	const membership_vector& get_vector()const{ return vec;}
+	const membership_vector& get_vector()const{ return vec_;}
 	static direction get_direction(const key& lhs, const key& rhs){
-		return (lhs < rhs) ? left : right;
+		return !(lhs >= rhs) ? left : right;
 	}
+
 	static direction inverse(const direction d){
 		return static_cast<direction>(1 - static_cast<int>(d));
 	}
-	sg_node(const value& _value)
-		:value_(_value){
+	sg_node(const value& _value, const membership_vector& mv)
+		:value_(_value),vec_(mv){
 		const int level = shared_data::instance().maxlevel;
 		next_keys[left].reserve(level);
 		next_keys[right].reserve(level);
@@ -182,6 +204,13 @@ public:
 			next_keys[left].push_back(boost::shared_ptr<const neighbor>());
 			next_keys[right].push_back(boost::shared_ptr<const neighbor>());
 		}
+	}
+	
+	explicit sg_node(suspended_node* sn){
+		using namespace std;
+		assert((sn->con[0] & sn->con[1]) == true);
+		value_.swap(sn->value_);
+		swap(vec_,sn->vec_);
 	}
 	boost::shared_ptr<const neighbor>
 	search_nearest(const key& mykey,const key& target)const{
@@ -219,6 +248,7 @@ private:
 	sg_node();
 };
 typedef std::pair<key,sg_node> kvp;
+
 
 
 

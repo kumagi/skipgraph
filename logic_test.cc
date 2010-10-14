@@ -79,6 +79,7 @@ const host& localhost = shared_data::instance().get_host();
 
 TEST(set, firstkey){
 	shared_data::instance().init();
+	shared_data::instance().myvector = membership_vector(0);
 	
 	eval::object<key,value> obj("k1","v1");
 	StrictMock<mock_server> sv;
@@ -108,12 +109,8 @@ TEST(treat, to_firstkey){
 	
 	// request's input/output
 	// treat operation
-	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		st->find("k1")->second.set_vector(membership_vector(1));
-	}
-	eval::object<key,key,host,membership_vector> 
-		obj("k2","k1",mockhost, membership_vector(3));
+	eval::object<key,key,host,membership_vector>
+		obj("k2","k1",mockhost, membership_vector(2));
 	
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
@@ -135,16 +132,20 @@ TEST(treat, to_firstkey){
 		STORAGE_DUMP;
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
-		assert(st->find("k1")->second.neighbors()[sg_node::right][0]);
+		assert(!!st->find("k1")->second.neighbors()[sg_node::right][0]);
+		assert(!!st->find("k1")->second.neighbors()[sg_node::right][1]);
+		assert(st->find("k1")->second.neighbors()[sg_node::right][0]->get_key() == "k2");
+		assert(st->find("k1")->second.neighbors()[sg_node::right][1]->get_key() == "k2");
+		assert(!st->find("k1")->second.neighbors()[sg_node::right][2]);
 	}
 }
-/*
-TEST(set, secondkey){
-	
-		k1  [k2] k2 is other node's key
+
+TEST(set_after_treat, secondkey){
+	/*
+		k1   k2 is other node's key
 		k1  [k2] 
 		k1  [k2]  k3<=new!
- 
+	*/
 	// request's input/output
 	eval::object<key,value> obj("k3","v3");
 	StrictMock<mock_request> req;
@@ -155,27 +156,20 @@ TEST(set, secondkey){
 	// set [k2] as other node's key
 	
 	
-	const host& h = shared_data::instance().get_host();
-	
-	StrictMock<mock_session> sn;	
-	for(int i=0; i< maxlevel; i++){
-		EXPECT_CALL(sn, notify(std::string("link"), key("k2"), i, "k1", h));
-		EXPECT_CALL(sn, notify(std::string("link"), key("k2"), i, "k3", h));
-	}
+	const membership_vector& localvector = shared_data::instance().myvector;
 
-	
+	StrictMock<mock_session> sn;
+	EXPECT_CALL(sn, notify
+		(std::string("treat"), key("k3"), "k2", localhost, localvector));
 	StrictMock<mock_server> sv;
+	EXPECT_CALL(sv, get_session(mockhost.get_address()))
+							.Times(1)
+							.WillOnce(ReturnRef(sn));
 	
 	// call
 	logic::set(&req, &sv);
-	// check
-	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_TRUE(st->find("k1") != st->end());
-		EXPECT_TRUE(st->find("k3") != st->end());
-	}
 }
-*/
+
 /*
 TEST(set, thirdkey){
 
