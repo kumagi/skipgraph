@@ -11,12 +11,21 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
 #include <boost/optional.hpp>
+#include <boost/utility.hpp>
 #include <mp/sync.h>
 #include "msgpack/rpc/server.h"
 #include "msgpack/rpc/client.h"
 
 #include "objlib.h"
 #include "msgpack.hpp"
+
+
+enum direction{
+	left = 0,
+	right = 1,
+};
+
+
 
 struct host{
 	host(){}
@@ -73,6 +82,8 @@ struct membership_vector{
 typedef std::string key;
 typedef std::string value;
 
+direction get_direction(const key& lhs, const key& rhs);
+direction inverse(const direction& d);
 
 // node infomation
 class neighbor {
@@ -148,13 +159,14 @@ struct shared_data: public singleton<shared_data>{
 	typedef sync_storage_t::ref ref_storage;
 	sync_storage_t storage;
 
-	// neighbors
+	/* neighbors */
 	typedef boost::unordered_map<key, boost::weak_ptr<neighbor> > ng_map_t;
 	typedef mp::sync<ng_map_t> sync_ng_map_t;
 	typedef sync_ng_map_t::ref ref_ng_map;
 	sync_ng_map_t ngmap;
 	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
-	
+	boost::shared_ptr<const neighbor> get_nearest_neighbor(const key& k);
+
 	// susupended storage
 	typedef boost::unordered_map<key, suspended_node> suspended_t;
 	typedef mp::sync<suspended_t> sync_suspended_t;
@@ -165,39 +177,19 @@ struct shared_data: public singleton<shared_data>{
 	membership_vector myvector;
 };
 
-struct suspended_node{
-	value value_;
-	membership_vector vec_;
-	bool con[2];
-	explicit suspended_node(const value& v, const membership_vector& mv)
-		:value_(v),vec_(mv){
-		con[0] = false, con[1] = false;
-	}
-};
 
 class sg_node{
 	value value_;
 	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
 	membership_vector vec_;
+	friend std::ostream& operator<<(std::ostream& ost, const suspended_node& sn);
 public:
-	enum direction{
-		left = 0,
-		right = 1,
-	};
 	void set_vector(const membership_vector& mv){
 		vec_ = mv;
 	}
 	const membership_vector& get_vector()const{ return vec_;}
-	static direction get_direction(const key& lhs, const key& rhs){
-		return !(lhs >= rhs) ? left : right;
-	}
-
-	static direction inverse(const direction d){
-		return static_cast<direction>(1 - static_cast<int>(d));
-	}
-	sg_node(const value& _value, const membership_vector& mv)
+	sg_node(const value& _value, const membership_vector& mv, int level)
 		:value_(_value),vec_(mv){
-		const int level = shared_data::instance().maxlevel;
 		next_keys[left].reserve(level);
 		next_keys[right].reserve(level);
 		for(int i=0;i<level;i++){
@@ -206,12 +198,6 @@ public:
 		}
 	}
 	
-	explicit sg_node(suspended_node* sn){
-		using namespace std;
-		assert((sn->con[0] & sn->con[1]) == true);
-		value_.swap(sn->value_);
-		swap(vec_,sn->vec_);
-	}
 	boost::shared_ptr<const neighbor>
 	search_nearest(const key& mykey,const key& target)const{
 		assert(mykey != target);
@@ -230,15 +216,16 @@ public:
 	
 	const std::string& get_value()const{ return value_;}
 	void set_value(const value& v){value_ = v;}
+	std::vector<boost::shared_ptr<const neighbor> >* neighbors(){
+		return next_keys;
+	}
 	const std::vector<boost::shared_ptr<const neighbor> >* neighbors()const{
 		return next_keys;
 	}
 	void new_link(int level, direction left_or_right, const key& k,
 								const host& h){
-		{
-			next_keys[left_or_right][level] = shared_data::instance()
-				.get_neighbor(k,h);
-		}
+		next_keys[left_or_right][level] = shared_data::instance()
+			.get_neighbor(k,h);
 	}
 	size_t get_maxlevel()const{
 		return next_keys[left].size();
@@ -247,8 +234,27 @@ public:
 private:
 	sg_node();
 };
-typedef std::pair<key,sg_node> kvp;
 
+struct suspended_node: public sg_node{
+	bool con[2];
+	explicit suspended_node(const value& v, const membership_vector& mv, int lv)
+		:sg_node(v,mv,lv){
+		con[0] = false, con[1] = false;
+	}
+	
+	void set_con(const key& self, const key& org){
+		con[get_direction(self, org)] = true;
+	}
+	bool is_complete()const{ return con[0] & con[1]; }
+
+	sg_node en_node(){
+		assert((con[0] & con[1]) == true);
+		return sg_node(*this);
+	}
+};
+std::ostream& operator<<(std::ostream& ost, const suspended_node& sn);
+
+typedef std::pair<key,sg_node> kvp;
 
 
 

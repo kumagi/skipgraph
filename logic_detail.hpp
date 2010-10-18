@@ -16,6 +16,7 @@ std::pair<st_iter, st_iter>
 it_and_next(const st_iter& org);
 
 std::pair<const key,sg_node>* get_nearest_node(const key& k);
+bool is_edge_key(const key& k);
 } // namespace detail
 } // namespace logic
 #endif
