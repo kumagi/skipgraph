@@ -133,7 +133,7 @@ public:
 };
 
 class sg_node;
-struct suspended_node;
+//struct suspended_node;
 
 
 struct shared_data: public singleton<shared_data>{
@@ -167,11 +167,13 @@ struct shared_data: public singleton<shared_data>{
 	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
 	boost::shared_ptr<const neighbor> get_nearest_neighbor(const key& k);
 
+	/*
 	// susupended storage
 	typedef boost::unordered_map<key, suspended_node> suspended_t;
 	typedef mp::sync<suspended_t> sync_suspended_t;
 	typedef sync_suspended_t::ref ref_suspended;
 	sync_suspended_t suspended;
+	*/
 	
 	// membership_vector
 	membership_vector myvector;
@@ -182,7 +184,6 @@ class sg_node{
 	value value_;
 	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
 	membership_vector vec_;
-	friend std::ostream& operator<<(std::ostream& ost, const suspended_node& sn);
 public:
 	void set_vector(const membership_vector& mv){
 		vec_ = mv;
@@ -234,7 +235,7 @@ public:
 private:
 	sg_node();
 };
-
+/*
 struct suspended_node: public sg_node{
 	bool con[2];
 	explicit suspended_node(const value& v, const membership_vector& mv, int lv)
@@ -253,6 +254,7 @@ struct suspended_node: public sg_node{
 	}
 };
 std::ostream& operator<<(std::ostream& ost, const suspended_node& sn);
+*/
 
 typedef std::pair<key,sg_node> kvp;
 

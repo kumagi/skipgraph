@@ -52,7 +52,7 @@ boost::shared_ptr<const neighbor> shared_data::get_nearest_neighbor(const key& k
 
 direction get_direction(const key& lhs, const key& rhs){
 	assert(lhs != rhs);
-	return !(lhs >= rhs) ? left : right;
+	return !(lhs >= rhs) ? right : left;
 }
 
 direction inverse(const direction& d){
@@ -86,12 +86,13 @@ static std::ostream& operator<<(std::ostream& ost, const std::pair<key, sg_node>
 	ost << " key:" << kvp.first << " value:" << kvp.second;
 	return ost;
 }
-
+/*
 std::ostream& operator<<(std::ostream& ost, const suspended_node& sn){
 	ost << " value:" << sn.value_
 			<< "[" <<  sn.con[left] << "|" << sn.con[right]  << "] ";
 	return ost;
 }
+*/
 
 void shared_data::storage_dump()const{
 	ref_storage st(shared_data::instance().storage);
