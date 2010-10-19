@@ -283,6 +283,7 @@ TEST(_7, expect_introduce){
 		k1  [k2] k2.2 [k2.5] k3
 		k1  [k2] k2.2 [k2.5] k3 // k3's left is k2!!!!!!
 	*/
+	EXPECT_TRUE(logic::detail::left_is_near("k3","k2.5","k2.2"));
 	EXPECT_TRUE(get_direction("k3", "k2.5") == left);
 	// request's input/output
 	membership_vector mockvector2(6);

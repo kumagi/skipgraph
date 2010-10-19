@@ -13,6 +13,17 @@ int string_distance(const std::string& lhs, const std::string& rhs){
 	return 0;
 }
 bool left_is_near(const key& org, const key& lhs, const key& rhs){
+	assert(!(org<lhs && rhs<org));
+	assert(!(org<rhs && lhs<org));
+	assert(org != rhs);
+	assert(org != lhs);
+	if(org < lhs){
+		if(lhs < rhs) return true;
+		if(org < rhs) return false;
+	}else{
+		if(rhs < lhs) return true;
+		if(rhs < org) return false;
+	}
 	return string_distance(org,lhs) < string_distance(org, rhs);
 }
 key& which_near(const key& org,key& lhs, key& rhs){

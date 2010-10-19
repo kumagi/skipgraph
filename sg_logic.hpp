@@ -63,7 +63,6 @@ namespace logic{
 const host& h = shared_data::instance().get_host();
 
 
-
 template <typename request, typename server>
 void die(request*, server*){
 	REACH("die:");
@@ -115,19 +114,19 @@ void set(request* req, server* sv){
 							localhost, shared_data::instance().myvector);
 				}
 				/*
-				if(nearest->second.neighbors()[dir][0]){
+					if(nearest->second.neighbors()[dir][0]){
 					shared_data::instance().storage_dump();
 					const neighbor& target = *nearest->second.neighbors()
-						[dir][0];
+					[dir][0];
 					sv->get_session(target.get_host().get_address())
-						.notify("introduce", arg.set_key, target.get_key(),
-							localhost, localmv, 0);
+					.notify("introduce", arg.set_key, target.get_key(),
+					localhost, localmv, 0);
 
 					sg_node& node = nearest->second;
 					for(size_t i=0; i<node.neighbors()[dir].size();i++){
-						node.neighbors()[dir][i].reset();
+					node.neighbors()[dir][i].reset();
 					}
-				}
+					}
 				*/
 			}
 		}else { // not found == it's first key!
@@ -262,18 +261,33 @@ void treat(request* req, server* sv){
 					get_direction(nearest->first, arg.org_key);
 				
 				// introduce to old node
-				if(nearest->second.neighbors()[dir][0]
-					&& left_is_near(nearest->first
-						,nearest->second.neighbors()[dir][0]
-						,st->lower_bound(""))){
-					const neighbor& target
-						= *nearest->second.neighbors()[dir][0];
-					sv->get_session(nearest->
-						second.neighbors()[dir][0]->get_address())
-						.notify("introduce", arg.org_key, target.get_key(),
-							target.get_host(), arg.org_vector,0);
+				if(nearest->second.neighbors()[dir][0]){
+					shared_data::ref_storage st(shared_data::instance().storage);
+					shared_data::storage_t::iterator relay = 
+						st->lower_bound(nearest->first);
+					if(relay != st->end()){
+						shared_data::storage_t::iterator next = (dir == left)
+							? boost::prior(relay) :boost::next(relay);
+
+						if(next->first != relay->first && 
+							detail::left_is_near(relay->first
+								,nearest->second.neighbors()[dir][0]->get_key()
+								,next->first)){
+							// if the new node is nearer than old connection
+							const neighbor& target
+								= *nearest->second.neighbors()[dir][0];
+							sv->get_session(nearest->
+								second.neighbors()[dir][0]->get_address())
+								.notify("introduce", arg.org_key, target.get_key(),
+									target.get_host(), arg.org_vector,0);
+						}else{
+							const host& localhost = shared_data::instance().get_host();
+							sv->get_session(localhost.get_address())
+								.notify("introduce", arg.org_key, next->first,
+									arg.origin, arg.org_vector,0);
+						}
+					}
 				}else{
-					DEBUG_OUT("#$@$#@$#$#$#$@#");
 					shared_data::ref_storage st(shared_data::instance().storage);
 					shared_data::storage_t::iterator relay = 
 						st->lower_bound(nearest->first);
@@ -313,7 +327,6 @@ void treat(request* req, server* sv){
 							st->lower_bound(nearest->first);
 						if(relay == st->end()) return;
 						assert(relay != st->end());
-						DEBUG_OUT("<%s>", relay->first.c_str());
 						shared_data::storage_t::iterator next = (dir == right)
 							? boost::prior(relay) :boost::next(relay);
 						if(next != st->end() && relay->first != next->first){
