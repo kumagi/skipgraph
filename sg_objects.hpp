@@ -208,8 +208,8 @@ public:
 		direction dir = mykey < target ? right : left;
 		for(int i = next_keys[dir].size()-1; i>=0; --i){
 			if(next_keys[dir][i] != NULL && (
-					 (target < next_keys[dir][i]->get_key() && dir == left) ||
-					 (next_keys[dir][i]->get_key() < target && dir == right)
+					 (target <= next_keys[dir][i]->get_key() && dir == left) ||
+					 (next_keys[dir][i]->get_key() <= target && dir == right)
 				 )
 			){
 				return next_keys[dir][i];

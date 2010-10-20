@@ -27,7 +27,7 @@ public:
 	// search
 	MOCK_METHOD4(notify,void(op&,const key&,int,const host&));
 	// treat
-	MOCK_METHOD5(notify,void(op&,const key&,const key&,const host&, const membership_vector&));
+	MOCK_METHOD4(notify,void(op&,const key&,const host&, const membership_vector&));
 	// link
 	MOCK_METHOD5(notify,void(op&,const key&,int,const key&, const host&));
 	// introduce
@@ -172,7 +172,7 @@ TEST(_3, more_new_key){
 
 	StrictMock<mock_session> sn;
 	EXPECT_CALL(sn, notify
-		(std::string("treat"), key("k3"), "k2", localhost, localvector));
+		(std::string("treat"), "k3", localhost, localvector));
 	StrictMock<mock_server> sv;
 	EXPECT_CALL(sv, get_session(mockhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
@@ -210,6 +210,15 @@ TEST(_4, link_to_newkey){
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
 		EXPECT_EQ(st->size(),2U);
+		EXPECT_TRUE(!st->find("k1")->second.neighbors()[left][0]);
+		EXPECT_TRUE(!st->find("k1")->second.neighbors()[left][1]);
+		EXPECT_TRUE(!st->find("k1")->second.neighbors()[left][2]);
+		EXPECT_TRUE(st->find("k1")->second.neighbors()[right][0]->get_key() == "k2");
+		EXPECT_TRUE(st->find("k1")->second.neighbors()[right][1]->get_key() == "k2");
+		EXPECT_TRUE(st->find("k1")->second.neighbors()[right][0]->get_host() == mockhost);
+		EXPECT_TRUE(st->find("k1")->second.neighbors()[right][1]->get_host() == mockhost);
+		EXPECT_TRUE(!st->find("k1")->second.neighbors()[right][2]);
+		
 		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][0]);
 		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][1]);
 		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]->get_key() == "k2");
@@ -237,7 +246,7 @@ TEST(_5, more_key_in_the_middle){
 
 	StrictMock<mock_session> sn;
 	EXPECT_CALL(sn, notify
-		("treat", "k2.2", "k2", localhost, localvector));
+		("introduce", "k2.2", "k2", localhost, localvector, 0));
 	StrictMock<mock_server> sv;
 	EXPECT_CALL(sv, get_session(mockhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
@@ -279,7 +288,11 @@ TEST(_6, link_to_the_middle_key){
 	logic::link(&req2, &sv);
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_EQ(st->size(),3U);
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[left][0]);
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[left][1]);
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[left][0]->get_key() == "k2");
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[left][1]->get_host() == mockhost);
+		EXPECT_TRUE(!st->find("k2.2")->second.neighbors()[left][2]);
 	}
 }
 
@@ -395,7 +408,7 @@ TEST(_9, add_more_key){
 
 	mock_server sv;
 	mock_session sn1;
-	EXPECT_CALL(sn1, notify("treat", "k2.3", "k2.5", 
+	EXPECT_CALL(sn1, notify("treat", "k2.3",
 			localhost, shared_data::instance().myvector));
 	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
