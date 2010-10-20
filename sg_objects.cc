@@ -59,7 +59,6 @@ direction inverse(const direction& d){
 	return static_cast<direction>(1 - static_cast<int>(d));
 }
 
-
 std::ostream&  operator<<(std::ostream& ost, const host& h){
 	ost << "(" << h.hostname << ":" << h.port << ")";
 	return ost;

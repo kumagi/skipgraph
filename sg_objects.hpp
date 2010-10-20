@@ -53,6 +53,9 @@ private:
 };
 
 
+std::ostream&  operator<<(std::ostream& ost, const host& h);
+
+
 struct membership_vector{
 	uint64_t vector;
 	explicit membership_vector(uint64_t v):vector(v){}

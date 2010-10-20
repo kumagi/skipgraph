@@ -77,29 +77,42 @@ bool is_edge_key(const key& k){
 }
 
 
-std::pair<const key,const host> 
+boost::optional<std::pair<key,host> >
 nearest_node_info(const key& from_key, const sg_node& from_node,
-	const direction& dir, shared_data::ref_storage& st, int level){
+	const direction& dir, shared_data::ref_storage& st){
+	/*
+	 * B is other node's key
+	 * A  [B]  C  D
+	 * D's left may be B because inner connection is omitted
+	 * so select [B] or C which is nearer
+	 */
 	shared_data::storage_t::iterator relay = 
 		st->lower_bound(from_key);
-	if(relay != st->end()){
-		const shared_data::storage_t::iterator next = (dir == left)
-			? boost::prior(relay) :boost::next(relay);
-		if(next->first != relay->first && 
-			detail::left_is_near(relay->first
-				,from_node.neighbors()[dir][level]->get_key()
-				,next->first)){
-			// if the new node is nearer than old connection
-			return std::make_pair(from_node.neighbors()[dir][0]->get_key()
-				,from_node.neighbors()[dir][0]->get_host());
-		}else{
-			return std::make_pair(next->first,shared_data::instance().get_host());
-		}
-	}else{
+	if(relay == st->end()){
 		assert(!"there must be some key saved!");
 	}
-}
+	const shared_data::storage_t::iterator next = (dir == left)
+		? boost::prior(relay) :boost::next(relay);
 
+	if(from_node.neighbors()[dir][0]
+		&&
+		// inner node's key doesnt exist
+		((next == st->end() || next->first == relay->first)
+			|| // or nodes neighbor is nearer than inner node
+			detail::left_is_near(relay->first
+				,from_node.neighbors()[dir][0]->get_key(),next->first))){
+		// the new node is nearer than old connection
+		return boost::make_optional(
+			std::make_pair(from_node.neighbors()[dir][0]->get_key()
+				,from_node.neighbors()[dir][0]->get_host()));
+	}else if(next != st->end() && next->first != relay->first){
+		// inner node may be near
+		return boost::make_optional(
+			(std::make_pair(next->first, shared_data::instance().get_host())));
+	}else{
+		return NULL;
+	}
+}
 
 }// namespace detail
 }// namespace logic
