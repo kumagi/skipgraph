@@ -83,8 +83,8 @@ void set(request* req, server* sv){
 				//(*st)[arg.set_key] = arg.set_value;
 				st->erase(arg.set_key);
 				st->insert(std::make_pair(arg.set_key,
-						sg_node(arg.set_value, shared_data::instance().myvector,
-							shared_data::instance().maxlevel)));
+																	sg_node(arg.set_value, shared_data::instance().myvector,
+																					shared_data::instance().maxlevel)));
 				req->result(true);
 				return;
 			}else{ // other node -> relay
@@ -97,7 +97,7 @@ void set(request* req, server* sv){
 					(shared_data::instance().myvector);
 				std::pair<key, sg_node> newcomer 
 					(arg.set_key, sg_node(arg.set_value, localmv,
-						shared_data::instance().maxlevel));
+																shared_data::instance().maxlevel));
 				
 				if(!locked_nearest){
 					// select some neighbor( it may not be efficient
@@ -111,7 +111,7 @@ void set(request* req, server* sv){
 				if(locked_nearest){ // send treat
 					sv->get_session(locked_nearest->get_address())
 						.notify("treat", arg.set_key, locked_nearest->get_key(), 
-							localhost, shared_data::instance().myvector);
+										localhost, shared_data::instance().myvector);
 				}
 				/*
 					if(nearest->second.neighbors()[dir][0]){
@@ -132,13 +132,13 @@ void set(request* req, server* sv){
 		}else { // not found == it's first key!
 			shared_data::ref_storage st(shared_data::instance().storage);
 			st->insert(std::make_pair(arg.set_key,
-					sg_node(arg.set_value, shared_data::instance().myvector,
-						shared_data::instance().maxlevel))); 
+																sg_node(arg.set_value, shared_data::instance().myvector,
+																				shared_data::instance().maxlevel))); 
 
 			req->result(true);
 		}
 		DEBUG_OUT(" key:%s  value:%s  stored. ",
-			arg.set_key.c_str(),arg.set_value.c_str());
+							arg.set_key.c_str(),arg.set_value.c_str());
 	}
 };
 
@@ -166,7 +166,7 @@ void search(request* req, server* sv){
 			bool target_is_right = true;
 			++node;
 			if((node != storage.end()) && 
-				org_distance > detail::string_distance(node->first,arg.target_key)){
+				 org_distance > detail::string_distance(node->first,arg.target_key)){
 				--node;
 			}else{
 				target_is_right = false;
@@ -180,13 +180,13 @@ void search(request* req, server* sv){
 			assert(node->second.neighbors()[left_or_right].size() > 0);
 			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
 				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
+					 (node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
 						||
 						((node->second.neighbors()[left_or_right][i]->get_key() <
 							arg.target_key)
-							^
-							(left_or_right == right))
-					)
+						 ^
+						 (left_or_right == right))
+					 )
 				){ // relay query
 					sv->get_session
 						(node->second.neighbors()[left_or_right][i]->get_address())
@@ -232,7 +232,7 @@ void link(request* req,server*){
 		if(node != st->end()){
 			node->second.new_link
 				(arg.level, get_direction(node->first, arg.origin_key), 
-					arg.origin_key, arg.origin);
+				 arg.origin_key, arg.origin);
 		}else{
 			assert(!"no key found");
 		}
@@ -270,21 +270,21 @@ void treat(request* req, server* sv){
 							? boost::prior(relay) :boost::next(relay);
 
 						if(next->first != relay->first && 
-							detail::left_is_near(relay->first
-								,nearest->second.neighbors()[dir][0]->get_key()
-								,next->first)){
+							 detail::left_is_near(relay->first
+								 ,nearest->second.neighbors()[dir][0]->get_key()
+								 ,next->first)){
 							// if the new node is nearer than old connection
 							const neighbor& target
 								= *nearest->second.neighbors()[dir][0];
 							sv->get_session(nearest->
-								second.neighbors()[dir][0]->get_address())
+															second.neighbors()[dir][0]->get_address())
 								.notify("introduce", arg.org_key, target.get_key(),
-									target.get_host(), arg.org_vector,0);
+												target.get_host(), arg.org_vector,0);
 						}else{
 							const host& localhost = shared_data::instance().get_host();
 							sv->get_session(localhost.get_address())
 								.notify("introduce", arg.org_key, next->first,
-									arg.origin, arg.org_vector,0);
+												arg.origin, arg.org_vector,0);
 						}
 					}
 				}else{
@@ -298,7 +298,7 @@ void treat(request* req, server* sv){
 					if(next != st->end() && relay->first != next->first){
 						sv->get_session(shared_data::instance().get_host().get_address())
 							.notify("introduce",arg.org_key, next->first,
-								arg.origin, arg.org_vector, 0);
+											arg.origin, arg.org_vector, 0);
 						DEBUG_OUT("<##%s>", relay->first.c_str());
 					}
 				}
@@ -308,7 +308,7 @@ void treat(request* req, server* sv){
 				for(; i <= matches && i < shared_data::instance().maxlevel; ++i){
 					sv->get_session(arg.origin.get_address())
 						.notify("link", arg.org_key, i,
-							nearest->first, h);
+										nearest->first, h);
 					nearest->second.new_link
 						(i, dir , arg.org_key, arg.origin);
 				}
@@ -320,7 +320,7 @@ void treat(request* req, server* sv){
 						sv->get_session(nearest->
 							second.neighbors()[inverse(dir)][0]->get_address())
 							.notify("introduce", arg.org_key, target.get_key(),
-								target.get_host(), arg.org_vector, i);
+											arg.origin, arg.org_vector, i);
 					}else{
 						shared_data::ref_storage st(shared_data::instance().storage);
 						shared_data::storage_t::iterator relay = 
@@ -332,7 +332,7 @@ void treat(request* req, server* sv){
 						if(next != st->end() && relay->first != next->first){
 							sv->get_session(shared_data::instance().get_host().get_address())
 								.notify("introduce",arg.org_key, next->first,
-									arg.origin, arg.org_vector, i);
+												arg.origin, arg.org_vector, i);
 						}
 					}
 				}
@@ -349,21 +349,21 @@ void introduce(request* req, server* sv){
 	if(it == st->end()) { // not found key -> retry
 		sv->get_session(arg.origin.get_address())
 			.notify("introduce",arg.org_key, arg.org_key,
-				arg.origin, arg.org_vector, 0);
+							arg.origin, arg.org_vector, 0);
 		return;
 	}
 	const direction dir(get_direction(arg.target_key, arg.org_key));
 	{
-		const key& my_key(arg.target_key);
+		const key& my_key(it->first);
 		sg_node& node = it->second;// alias
 		std::vector<boost::shared_ptr<const neighbor> >& next_keys =
 			node.neighbors()[dir];
 		if(!!next_keys[arg.level] && detail::left_is_near(my_key, 
-				next_keys[arg.level]->get_key(), arg.org_key)){
+																											next_keys[arg.level]->get_key(), arg.org_key)){
 			// if the original connection is near
 			sv->get_session(next_keys[arg.level]->get_address())
 				.notify("introduce",arg.org_key, 
-					next_keys[arg.level]->get_key(), arg.origin, arg.org_vector, 0);
+								next_keys[arg.level]->get_key(), arg.origin, arg.org_vector, 0);
 			return;
 		}
 	
@@ -376,12 +376,16 @@ void introduce(request* req, server* sv){
 			as_neighbor = shared_data::instance().get_nearest_neighbor(arg.org_key);
 		}
 		DEBUG_OUT("matched:%d\n", matches);
-		for(;i<matches; ++i){
-			node.new_link
-				(i, inverse(dir) , arg.org_key, arg.origin);
+		for(;i<=matches; ++i){
+			node.new_link(i, dir , arg.org_key, arg.origin);
 			sv->get_session(arg.origin.get_address())
 				.notify("link", arg.org_key, i, my_key, localhost);
 		}
+		const std::pair<const key, const host> nearest_node
+			= detail::nearest_node_info(my_key, node, dir, st, i);
+		sv->get_session(nearest_node.second.get_address())
+			.notify("introduce", arg.org_key, nearest_node.first,
+				arg.origin, arg.org_vector,i);
 	}
 }
 }

@@ -1,6 +1,7 @@
-#include "sg_logic.hpp"
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include "sg_logic.hpp"
 #include "sg_objects.hpp"
 #include "obj_eval.hpp"
 #include <assert.h>

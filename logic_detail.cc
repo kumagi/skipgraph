@@ -76,5 +76,30 @@ bool is_edge_key(const key& k){
 	return false;
 }
 
+
+std::pair<const key,const host> 
+nearest_node_info(const key& from_key, const sg_node& from_node,
+	const direction& dir, shared_data::ref_storage& st, int level){
+	shared_data::storage_t::iterator relay = 
+		st->lower_bound(from_key);
+	if(relay != st->end()){
+		const shared_data::storage_t::iterator next = (dir == left)
+			? boost::prior(relay) :boost::next(relay);
+		if(next->first != relay->first && 
+			detail::left_is_near(relay->first
+				,from_node.neighbors()[dir][level]->get_key()
+				,next->first)){
+			// if the new node is nearer than old connection
+			return std::make_pair(from_node.neighbors()[dir][0]->get_key()
+				,from_node.neighbors()[dir][0]->get_host());
+		}else{
+			return std::make_pair(next->first,shared_data::instance().get_host());
+		}
+	}else{
+		assert(!"there must be some key saved!");
+	}
+}
+
+
 }// namespace detail
 }// namespace logic
