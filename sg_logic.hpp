@@ -91,6 +91,7 @@ void set(request* req, server* sv){
 				const host& localhost = shared_data::instance().get_host();
 				const membership_vector& localmv
 					(shared_data::instance().myvector);
+				shared_data::ref_storage st(shared_data::instance().storage);
 
 				// search nearest
 				boost::shared_ptr<const neighbor> locked_nearest
@@ -98,7 +99,6 @@ void set(request* req, server* sv){
 				if(locked_nearest && (locked_nearest->get_key() == arg.set_key)){
 					// matched with already seted key in other node
 					// replace it!
-					shared_data::ref_storage st(shared_data::instance().storage);
 					st->insert(std::make_pair(arg.set_key,
 							sg_node(arg.set_value, shared_data::instance().myvector,
 								shared_data::instance().maxlevel)));
@@ -108,13 +108,12 @@ void set(request* req, server* sv){
 					return;
 				}
 				
-				
 				if(!locked_nearest){
 					const direction dir(get_direction(nearest->first, arg.set_key));
 					if(nearest->second.neighbors()[dir][0]){
-						shared_data::ref_storage st(shared_data::instance().storage);
+						const key& nearest_first = nearest->first;
 						const boost::optional<std::pair<key, host> > nearest_node =
-							detail::nearest_node_info(nearest->first,
+							detail::nearest_node_info(nearest_first,
 								nearest->second, dir, st);
 						if(nearest_node){
 							std::pair<key, host> data = *nearest_node;
@@ -131,18 +130,14 @@ void set(request* req, server* sv){
 					// select some neighbor( it may not be efficient
 					locked_nearest = (shared_data::instance().get_nearest_neighbor(arg.set_key));
 				}
-
-				{
-					shared_data::ref_storage st(shared_data::instance().storage);
+				if(locked_nearest){ // send treat
 					st->insert(std::make_pair(arg.set_key, 
 							sg_node(arg.set_value, localmv,
 								shared_data::instance().maxlevel)));
-					req->result(true);
-				}
-				if(locked_nearest){ // send treat
 					sv->get_session(locked_nearest->get_address())
 						.notify("treat", arg.set_key,  
 							localhost, shared_data::instance().myvector);
+					req->result(true);
 				}
 			}
 		}else { // not found == it's first key!
@@ -153,7 +148,7 @@ void set(request* req, server* sv){
 			req->result(true);
 		}
 	}
-};
+}
 
 template <typename request, typename server>
 void search(request* req, server* sv){
@@ -262,13 +257,46 @@ void treat(request* req, server* sv){
 	else{
 		DEBUG_OUT("treated by %s\n", nearest->first.c_str());
 		if(nearest->first == arg.org_key){ // already exist in local -> introduce to both
-			// FIXME
-			assert(false);
+			bool flag = false;
+			shared_data::ref_storage st(shared_data::instance().storage);
+			sg_node& node = nearest->second;
+			{
+				const boost::optional<std::pair<key, host> > nearest_node
+					= detail::nearest_node_info(arg.org_key, node, left, st);
+				if(nearest_node){
+					sv->get_session(nearest_node->second.get_address())
+						.notify("introduce", arg.org_key, nearest_node->first,
+							arg.origin, arg.org_vector,0);
+					flag = true;
+				}
+			}
+			{
+				const boost::optional<std::pair<key, host> > nearest_node
+					= detail::nearest_node_info(arg.org_key, node, right, st);
+				if(nearest_node){
+					sv->get_session(nearest_node->second.get_address())
+						.notify("introduce", arg.org_key, nearest_node->first,
+							arg.origin, arg.org_vector,0);
+					flag = true;
+				}
+			}
+			if(arg.origin != shared_data::instance().get_host()){
+				if(!flag){
+					boost::shared_ptr<const neighbor> locked_nearest =
+						shared_data::instance().get_nearest_neighbor(arg.org_key);
+					sv->get_session(locked_nearest->get_address())
+						.notify("treat", arg.org_key,
+							arg.origin, arg.org_vector);
+				}
+				st->erase(arg.org_key);
+			}
 		}else{
 			boost::shared_ptr<const neighbor> locked_nearest
 				= nearest->second.search_nearest(nearest->first,arg.org_key);
 			if(locked_nearest){ // more near node exists -> relay
-				
+				sv->get_session(locked_nearest->get_address())
+					.notify("treat", arg.org_key, arg.origin, arg.org_vector);
+
 			}else{
 				const membership_vector my_mv = nearest->second.get_vector();
 				const int matches = my_mv.match(arg.org_vector);

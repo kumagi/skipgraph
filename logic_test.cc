@@ -160,6 +160,7 @@ TEST(_3, more_new_key){
 		k1  [k2] 
 		k1  [k2]  k3<=new!
 	*/
+	
 	// request's input/output
 	eval::object<key,value> obj("k3","v3");
 	StrictMock<mock_request> req;
@@ -182,6 +183,7 @@ TEST(_3, more_new_key){
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
 		EXPECT_TRUE(st->find("k1") != st->end());
+		EXPECT_TRUE(st->find("k3") != st->end());
 		EXPECT_EQ(st->size() , 2U);
 	}
 }
@@ -592,7 +594,6 @@ const host mockhost3("1.2.3.4",121);
 const membership_vector mockvector3(1);
 
 TEST(_13, more_middle_key){
-
 	/*                    
 		k1       k2.2           k2.3         k3
 		k1  [k2] k2.2   new!    k2.3  [k2.5] k3
@@ -631,7 +632,7 @@ TEST(_13, more_middle_key){
 	logic::treat(&req, &sv);
 }
 
-TEST(_14, introduce_middle_key){
+TEST(_14, introduce_middle_key_to_left){
 	/*            introduce
 		k1       k2.2           k2.3         k3
 		k1  [k2] k2.2           k2.3  [k2.5] k3
@@ -666,7 +667,7 @@ TEST(_14, introduce_middle_key){
 	logic::introduce(&req, &sv);
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_TRUE(st->find("k1") != st->end());
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
 	}
 }
 
@@ -678,17 +679,88 @@ TEST(_15, introduce_middle_key_to_right){
 	*/
 	// request's input/output
 	eval::object<key,key,host,membership_vector,int>
-		obj("k2.22", "k3",mockhost3, mockvector3, 1);
+		obj("k2.22", "k2.3", mockhost3, mockvector3, 0);
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+
+	StrictMock<mock_server> sv;
+	StrictMock<mock_session> sn1;
+	EXPECT_CALL(sn1, notify
+		("link", "k2.22", 0, "k2.3", localhost));
+	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
+		.WillRepeatedly(ReturnRef(sn1));
+	
+	StrictMock<mock_session> sn2;
+	EXPECT_CALL(sn2, notify
+		("introduce", "k2.22", "k2.5", mockhost3, mockvector3, 1));
+	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
+		.WillRepeatedly(ReturnRef(sn2));
+	
+	// call
+	logic::introduce(&req, &sv);
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
+	}
+}
+
+TEST(_16, overwrite_old_key_in_other_node){
+	/* 
+		k1       k2.2         k2.3         k3
+		k1  [k2] k2.2         k2.3  [k2.5] k3
+		k1  [k2] k2.2  k2.22  k2.3  [k2.5] k3
+	*/
+	// request's input/output
+	const membership_vector& localvector = shared_data::instance().myvector;
+	
+	eval::object<key,value> obj("k2.22", "k3");
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+	EXPECT_CALL(req, result(true));
+
+	
+	StrictMock<mock_server> sv;
+
+	StrictMock<mock_session> sn;
+
+	EXPECT_CALL(sn, notify("treat", "k2.22", localhost, localvector));
+	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
+		.WillRepeatedly(ReturnRef(sn));
+	// call
+	logic::set(&req, &sv);
+	{
+		shared_data::ref_storage st(shared_data::instance().storage);
+		EXPECT_TRUE(st->size() == 5);
+	}
+}
+
+TEST(_17, more_overwrite_middle_key){
+	/*                    
+		k1       k2.2           k2.3         k3
+		k1  [k2] k2.2   new!    k2.3  [k2.5] k3
+		k1  [k2] k2.2  [k2.22]  k2.3  [k2.5] k3
+	*/
+	EXPECT_TRUE(logic::detail::left_is_near("k2.2","k2.22","k2.3"));
+	EXPECT_TRUE(logic::detail::left_is_near("k2.3","k2.22","k2.2"));
+	// request's input/output
+	eval::object<key,host,membership_vector>
+		obj("k2.22",mockhost3, mockvector3);
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
 
 	StrictMock<mock_server> sv;
 	
+	StrictMock<mock_session> sn;
+	EXPECT_CALL(sn, notify
+		("introduce", "k2.22", "k2.2", mockhost3, mockvector3, 0));
+	EXPECT_CALL(sn, notify
+		("introduce", "k2.22", "k2.3", mockhost3, mockvector3, 0));
+	EXPECT_CALL(sv, get_session(localhost.get_address()))
+		.WillRepeatedly(ReturnRef(sn));
+	
 	// call
-	logic::introduce(&req, &sv);
-	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_TRUE(st->find("k1") != st->end());
-	}
+	logic::treat(&req, &sv);
 }
