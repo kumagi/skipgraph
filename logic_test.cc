@@ -32,6 +32,7 @@ public:
 	MOCK_METHOD5(notify,void(op&,const key&,int,const key&, const host&));
 	// introduce
 	MOCK_METHOD6(notify,void(op&,const key&,const key&, const host&, const membership_vector&, int));
+	
 };
 
 class mock_server{
@@ -111,7 +112,6 @@ TEST(_1, set_first_key){
 	EXPECT_FALSE(logic::detail::get_nearest_node("k0") == NULL);
 	EXPECT_FALSE(logic::detail::get_nearest_node("k2") == NULL);
 }
-
 
 TEST(_2, treat_to_firstkey){
 	/*
@@ -763,4 +763,73 @@ TEST(_17, more_overwrite_middle_key){
 	
 	// call
 	logic::treat(&req, &sv);
+}
+
+const host search_origin("1.43.43.2", 48);
+TEST(_18, search__will_find){
+	/*                    
+		k1       k2.2           k2.3         k3
+		k1  [k2] k2.2           k2.3  [k2.5] k3
+		k1  [k2] k2.2  [k2.22]  k2.3  [k2.5] k3
+	*/
+	// request's input/output
+	eval::object<key,int,host>
+		obj("k2.2", 100, search_origin);
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+	
+	StrictMock<mock_server> sv;
+	StrictMock<mock_session> sn;
+	EXPECT_CALL(sn, notify
+		("found", "k2.2", "v2.2"));
+	EXPECT_CALL(sv, get_session(search_origin.get_address()))
+		.WillRepeatedly(ReturnRef(sn));
+	
+	// call
+	logic::search(&req, &sv);
+}
+TEST(_18, search__will_relay){
+	/*                    
+		k1       k2.2           k2.3         k3
+		k1  [k2] k2.2           k2.3  [k2.5] k3
+		k1  [k2] k2.2  [k2.22]  k2.3  [k2.5] k3
+	*/
+	// request's input/output
+	eval::object<key,int,host>
+		obj("k2.22", 100, search_origin);
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+	
+	StrictMock<mock_server> sv;
+	StrictMock<mock_session> sn;
+	EXPECT_CALL(sn, notify("search", "k2.22", _, search_origin));
+	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
+		.WillRepeatedly(ReturnRef(sn));
+	
+	// call
+	logic::search(&req, &sv);
+}
+TEST(_18, search__will_not_found){
+	/*                    
+		k1       k2.2           k2.3         k3
+		k1  [k2] k2.2           k2.3  [k2.5] k3
+		k1  [k2] k2.2  [k2.22]  k2.3  [k2.5] k3
+	*/
+	// request's input/output
+	eval::object<key,int,host>
+		obj("hoge", 100, search_origin);
+	StrictMock<mock_request> req;
+	EXPECT_CALL(req, params())
+		.WillOnce(ReturnRef(obj.get()));
+	
+	StrictMock<mock_server> sv;
+	StrictMock<mock_session> sn;
+	EXPECT_CALL(sn, notify("notfound", "hoge"));
+	EXPECT_CALL(sv, get_session(search_origin.get_address()))
+		.WillRepeatedly(ReturnRef(sn));
+	
+	// call
+	logic::search(&req, &sv);
 }

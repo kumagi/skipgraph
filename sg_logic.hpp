@@ -4,6 +4,7 @@
 #include <boost/function.hpp>
 #include <map>
 #include <string>
+#include <algorithm>
 
 #define DEBUG_MODE
 #include "debug_macro.h"
@@ -48,8 +49,8 @@ public:
 
 RPC_OPERATION1(die, std::string, name);
 RPC_OPERATION2(set, key, set_key, value, set_value);
-RPC_OPERATION4(link, key, target_key, int, level, key, origin_key, host, origin);
-RPC_OPERATION3(search, key, target_key, int, level, host, origin);
+RPC_OPERATION4(link, key, target_key, int, level, key, org_key, host, origin);
+
 RPC_OPERATION2(found, key, found_key, value, found_value);
 RPC_OPERATION1(notfound, key, target_key);
 RPC_OPERATION2(range_search, range, target_range, host, origin);
@@ -59,6 +60,8 @@ RPC_OPERATION3(treat, key, org_key,// key, target_key,
     host,origin, membership_vector, org_vector);
 RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
 	membership_vector, org_vector, int, level);
+
+RPC_OPERATION3(search, key, target_key, int, level, host, origin);
 namespace logic{
 const host& h = shared_data::instance().get_host();
 
@@ -155,63 +158,32 @@ void search(request* req, server* sv){
 	BLOCK("search:");
 	msg::search arg(req->params());
 	
-	shared_data::ref_storage ref(shared_data::instance().storage);
-	shared_data::storage_t& storage = *ref;
-  
-	shared_data::storage_t::const_iterator node = storage.find(arg.target_key);
-	if(node == storage.end()){ // this node does not have target key
-		node = storage.lower_bound(arg.target_key);
-		if(node == storage.end()){
-			node = storage.upper_bound(arg.target_key);
-			
-			sv->get_session
-				(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
-				.notify("notfound",arg.target_key);
-
-		}else{
-			const key& found_key = node->first;
-			int org_distance = detail::string_distance(found_key,arg.target_key);
-			bool target_is_right = true;
-			++node;
-			if((node != storage.end()) && 
-				org_distance > detail::string_distance(node->first,arg.target_key)){
-				--node;
-			}else{
-				target_is_right = false;
-			}
-			
-			// search target
-			direction left_or_right = target_is_right 
-				? right : left;
-			
-			int i;
-			assert(node->second.neighbors()[left_or_right].size() > 0);
-			for(i = node->second.neighbors()[left_or_right].size()-1; i>=0; --i){
-				if(node->second.neighbors()[left_or_right][i].get() != NULL &&
-					(node->second.neighbors()[left_or_right][i]->get_key() == arg.target_key
-						||
-						((node->second.neighbors()[left_or_right][i]->get_key() <
-							arg.target_key)
-							^
-							(left_or_right == right))
-					)
-				){ // relay query
-					sv->get_session
-						(node->second.neighbors()[left_or_right][i]->get_address())
-						.notify("search",arg.target_key,i,arg.origin);
-					return;
-				}
-			}
-			if(i < 0){
-				sv->get_session
-					(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
-					.notify("notfound",arg.target_key);
-			}
-		}
-	}else{ // found it
+	shared_data::ref_storage st(shared_data::instance().storage);
+	shared_data::storage_t::const_iterator node = st->find(arg.target_key);
+	if(node != st->end()) { // found it
+		DEBUG_OUT("found!");
 		sv->get_session
 			(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
 			.notify("found",arg.target_key,node->second.get_value());
+	}else{// this node does not have target key
+		st.reset();
+		DEBUG_OUT("relay...");
+		const std::pair<const key,sg_node>* nearest =
+			detail::get_nearest_node(arg.target_key);
+		assert(nearest && "save something before search!");
+		// search target
+		//const direction dir = get_direction(nearest->first, arg.target_key);
+		
+		boost::shared_ptr<const neighbor> locked_nearest
+			= nearest->second.search_nearest(nearest->first,arg.target_key);
+		if(locked_nearest){ // more near node exists -> relay
+			sv->get_session(locked_nearest->get_address())
+				.notify("search", arg.target_key, 100, arg.origin );
+		}else{
+			sv->get_session
+				(msgpack::rpc::ip_address(arg.origin.hostname,arg.origin.port))
+				.notify("notfound",arg.target_key);
+		}
 	}
 }
 
@@ -222,6 +194,7 @@ void found(request* req, server*){
 	std::cerr << "key:" <<
 		arg.found_key << " & value:" << arg.found_value << " " << std::endl;
 }
+
 template <typename request, typename server>
 void notfound(request* req, server*){
 	BLOCK("found:");
@@ -234,16 +207,30 @@ template <typename request, typename server>
 void link(request* req,server*){
 	BLOCK("link:");
 	const msg::link arg(req->params());
-	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		shared_data::storage_t::iterator node = st->find(arg.target_key);
-		if(node != st->end()){
-			node->second.new_link
-				(arg.level, get_direction(arg.target_key, arg.origin_key), 
-					arg.origin_key, arg.origin);
-		}else{
-			assert(!"no key found");
+
+	shared_data::ref_storage st(shared_data::instance().storage);
+	shared_data::storage_t::iterator iter = st->find(arg.target_key);
+	if(iter != st->end()){
+		const key& key = iter->first;
+		sg_node& node = iter->second;
+		const direction dir = get_direction(key, arg.org_key);
+		const boost::optional<std::pair<key, host> > nearest_node
+			= detail::nearest_node_info(key, node, inverse(dir), st);
+		if(nearest_node){
+			std::cout << nearest_node->first << ":" << nearest_node->second;
+			sv->get_session(nearest_node->second.get_address())
+				.notify("introduce", arg.org_key, nearest_node->first,
+					arg.origin, arg.org_vector,i);
 		}
+	}
+
+	shared_data::storage_t::iterator node = st->find(arg.target_key);
+	if(node != st->end()){
+		node->second.new_link
+			(arg.level, get_direction(arg.target_key, arg.origin_key), 
+				arg.origin_key, arg.origin);
+	}else{
+		assert(!"no key found");
 	}
 }
 
@@ -291,12 +278,12 @@ void treat(request* req, server* sv){
 				st->erase(arg.org_key);
 			}
 		}else{
+			// relay
 			boost::shared_ptr<const neighbor> locked_nearest
 				= nearest->second.search_nearest(nearest->first,arg.org_key);
 			if(locked_nearest){ // more near node exists -> relay
 				sv->get_session(locked_nearest->get_address())
 					.notify("treat", arg.org_key, arg.origin, arg.org_vector);
-
 			}else{
 				const membership_vector my_mv = nearest->second.get_vector();
 				const int matches = my_mv.match(arg.org_vector);
@@ -389,5 +376,6 @@ void introduce(request* req, server* sv){
 		}
 	}
 }
+
 }
 #endif

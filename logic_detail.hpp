@@ -22,6 +22,10 @@ boost::optional<std::pair<key,host> >
 nearest_node_info(const key& from_key,
 	const sg_node& from_node, const direction& dir, shared_data::ref_storage& st);
 
+boost::optional<std::pair<key,host> >
+nearest_node_info_level(const key& target,const direction& dir,
+	shared_data::ref_storage& st, int level);
+
 
 
 } // namespace detail
