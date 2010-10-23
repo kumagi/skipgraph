@@ -25,39 +25,42 @@ typedef std::string value;
 template <typename Server> 
 class reflection{
 public:
-	 typedef typename boost::function <void
-		 (msgpack::rpc::request*, Server*)> reaction;
-	 typedef std::map<std::string, reaction> table;
- private:
-	 table func_table;
- public:
-	 void regist(const std::string& name, reaction func){
-		 assert(func_table.find(name) == func_table.end());
-		 typedef std::pair<typename table::iterator, bool> its;
-		 its it = func_table.insert(std::make_pair(name,func));
-		 assert(it.second != false && "double insertion");
-	 }
-	 bool call(const std::string& name, msgpack::rpc::request* req,
-						 Server* sv)const{
-		 typename table::const_iterator it = func_table.find(name);
-		 if(it == func_table.end()) return false;
-		 it->second(req,sv);
-		 return true;
-	 }
-	 //const name_to_func* get_table_ptr(void)const{return &table;};
- };
+	typedef typename boost::function <void(msgpack::rpc::request*, Server*)>
+	reaction;
+	typedef std::map<std::string, reaction> table;
+private:
+	table func_table;
+public:
+	void regist(const std::string& name, reaction func){
+		assert(func_table.find(name) == func_table.end() &&"you can't register one function two times");
+		typedef std::pair<typename table::iterator, bool> its;
+		its it = func_table.insert(std::make_pair(name,func));
+		assert(it.second != false && "double insertion");
+	}
+	bool call(const std::string& name, msgpack::rpc::request* req,
+		Server* sv)const{
+		typename table::const_iterator it = func_table.find(name);
+		if(it == func_table.end()) {
+			assert(!"undefined function calll");
+			return false;
+		}
+		it->second(req,sv);
+		return true;
+	}
+	//const name_to_func* get_table_ptr(void)const{return &table;};
+};
 
 RPC_OPERATION1(die, std::string, name);
+RPC_OPERATION1(dump, std::string, name);
 RPC_OPERATION2(set, key, set_key, value, set_value);
 RPC_OPERATION4(link, key, target_key, int, level, key, org_key, host, origin);
 
 RPC_OPERATION2(found, key, found_key, value, found_value);
 RPC_OPERATION1(notfound, key, target_key);
-RPC_OPERATION2(range_search, range, target_range, host, origin);
-RPC_OPERATION3(range_found, range, target_range, std::vector<key>,keys, std::vector<value>,values);
-RPC_OPERATION2(range_notfound, range, target_range, std::vector<key>, keys);
-RPC_OPERATION3(treat, key, org_key,// key, target_key,
-    host,origin, membership_vector, org_vector);
+RPC_OPERATION2(range_search, range, target_range, host, origin)
+//RPC_OPERATION3(range_found, range, target_range, std::vector<key>,keys, std::vector<value>,values);
+//RPC_OPERATION2(range_notfound, range, target_range, std::vector<key>, keys);
+RPC_OPERATION3(treat, key, org_key,host,origin, membership_vector, org_vector);
 RPC_OPERATION5(introduce, key, org_key, key, target_key, host, origin,
 	membership_vector, org_vector, int, level);
 
@@ -66,10 +69,24 @@ namespace logic{
 const host& h = shared_data::instance().get_host();
 
 template <typename request, typename server>
-void die(request*, server*){
+void range_search(request* req, server* sv){
+	BLOCK("search:");
+	msg::range_search arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
+}
+
+template <typename request, typename server>
+void die(request* req, server*){
 	REACH("die:");
+	msg::die arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
 	//	fprintf(stderr,"die called ok");
 	exit(0);
+};
+template <typename request, typename server>
+void dump(request*, server*){
+	BLOCK("dump");
+	std::cerr << std::endl << shared_data::instance();
 };
 
 template <typename request, typename server>
@@ -157,7 +174,7 @@ template <typename request, typename server>
 void search(request* req, server* sv){
 	BLOCK("search:");
 	msg::search arg(req->params());
-	
+	DEBUG(std::cerr << arg << std::endl);
 	shared_data::ref_storage st(shared_data::instance().storage);
 	shared_data::storage_t::const_iterator node = st->find(arg.target_key);
 	if(node != st->end()) { // found it
@@ -191,6 +208,7 @@ template <typename request, typename server>
 void found(request* req, server*){
 	BLOCK("found:");
 	const msg::found arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
 	std::cerr << "key:" <<
 		arg.found_key << " & value:" << arg.found_value << " " << std::endl;
 }
@@ -199,38 +217,41 @@ template <typename request, typename server>
 void notfound(request* req, server*){
 	BLOCK("found:");
 	const msg::notfound arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
 	std::cerr << "key:" <<
 		arg.target_key << " " << std::endl;
 }
 
 template <typename request, typename server>
-void link(request* req,server*){
+void link(request* req,server* sv){
 	BLOCK("link:");
 	const msg::link arg(req->params());
-
+	DEBUG(std::cerr << arg << std::endl);
+	const host& localhost(shared_data::instance().get_host());
+	const direction dir = get_direction(arg.target_key, arg.org_key);
+	
 	shared_data::ref_storage st(shared_data::instance().storage);
 	shared_data::storage_t::iterator iter = st->find(arg.target_key);
 	if(iter != st->end()){
-		const key& key = iter->first;
-		sg_node& node = iter->second;
-		const direction dir = get_direction(key, arg.org_key);
-		const boost::optional<std::pair<key, host> > nearest_node
-			= detail::nearest_node_info(key, node, inverse(dir), st);
-		if(nearest_node){
-			std::cout << nearest_node->first << ":" << nearest_node->second;
-			sv->get_session(nearest_node->second.get_address())
-				.notify("introduce", arg.org_key, nearest_node->first,
-					arg.origin, arg.org_vector,i);
+		const shared_data::storage_t::iterator next = (dir == left)
+			? boost::prior(iter) :boost::next(iter);
+		if((dir == left && arg.target_key < iter->first) ||
+			(dir == right && iter->first < arg.target_key)){
+			// if more near key exist in this node
+			iter->second.new_link(arg.level, dir,arg.org_key, arg.origin);
+			sv->get_session(arg.origin.get_address())
+				.notify("link", arg.org_key, arg.level, iter->first, localhost);
+			return;
 		}
-	}
-
-	shared_data::storage_t::iterator node = st->find(arg.target_key);
-	if(node != st->end()){
-		node->second.new_link
-			(arg.level, get_direction(arg.target_key, arg.origin_key), 
-				arg.origin_key, arg.origin);
-	}else{
-		assert(!"no key found");
+		if(!iter->second.neighbors()[dir][arg.level] ||
+			detail::left_is_near(arg.target_key, arg.org_key,
+				iter->second.neighbors()[dir][arg.level]->get_key())){
+			iter->second.new_link(arg.level, dir,arg.org_key, arg.origin);
+		}else if(iter->second.neighbors()[dir][arg.level]){
+			const neighbor& target = *iter->second.neighbors()[dir][arg.level];
+			sv->get_session(target.get_address())
+				.notify("link", arg.org_key, arg.level, target.get_key(), arg.origin);
+		}
 	}
 }
 
@@ -238,11 +259,12 @@ template <typename request, typename server>
 void treat(request* req, server* sv){
 	BLOCK("treat:");
 	msg::treat arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
 	std::pair<const key,sg_node>* nearest
 		= detail::get_nearest_node(arg.org_key);
-	if(nearest == NULL) return; // I have no key.
+	if(nearest == NULL) {DEBUG_OUT("I have no key");return;} // I have no key.
 	else{
-		DEBUG_OUT("treated by %s\n", nearest->first.c_str());
+		DEBUG_OUT("treated by [%s]\n", nearest->first.c_str());
 		if(nearest->first == arg.org_key){ // already exist in local -> introduce to both
 			bool flag = false;
 			shared_data::ref_storage st(shared_data::instance().storage);
@@ -306,6 +328,8 @@ void treat(request* req, server* sv){
 				// linking to newnode
 				int i=0;
 				for(; i <= matches && i < shared_data::instance().maxlevel; ++i){
+					DEBUG_OUT("link from %s to %s\n", nearest->first.c_str(), arg.org_key.c_str());
+					std::cout << "address:" << arg.origin << std::endl;;
 					sv->get_session(arg.origin.get_address())
 						.notify("link", arg.org_key, i,
 							nearest->first, h);
@@ -334,6 +358,7 @@ void treat(request* req, server* sv){
 template <typename request, typename server>
 void introduce(request* req, server* sv){
 	msg::introduce arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
 	shared_data::ref_storage st(shared_data::instance().storage);
 	shared_data::storage_t::iterator it = st->find(arg.target_key);
 	if(it == st->end()) { // not found key -> retry
@@ -343,38 +368,43 @@ void introduce(request* req, server* sv){
 		return;
 	}
 	const direction dir(get_direction(arg.target_key, arg.org_key));
-	{
-		const key& my_key(it->first);
-		sg_node& node = it->second;// alias
 
-		if(arg.origin == shared_data::instance().get_host()){ return; }
+	// alias
+	const key& my_key(it->first);
+	sg_node& node = it->second;// alias
+
+	const membership_vector my_mv = node.get_vector();
+	const host& localhost(shared_data::instance().get_host());
+	const int matches = 
+		std::min(my_mv.match(arg.org_vector), shared_data::instance().maxlevel);
 	
-		const membership_vector my_mv = node.get_vector();
-		const host& localhost(shared_data::instance().get_host());
-		const int matches = 
-			std::min(my_mv.match(arg.org_vector), shared_data::instance().maxlevel);
-		int i = arg.level;
-		if(i==0 || i < matches){
-			boost::shared_ptr<const neighbor> as_neighbor
-				= shared_data::instance().get_nearest_neighbor(arg.org_key);
-			DEBUG_OUT("matched:%d\n", matches);
-			for(;i<=matches; ++i){
-				node.new_link(i, dir , arg.org_key, arg.origin);
-				sv->get_session(arg.origin.get_address())
-					.notify("link", arg.org_key, i, my_key, localhost);
-			}
-		}
-		if(i < shared_data::instance().maxlevel){
-			const boost::optional<std::pair<key, host> > nearest_node
-				= detail::nearest_node_info(my_key, node, inverse(dir), st);
-			if(nearest_node){
-				std::cout << nearest_node->first << ":" << nearest_node->second;
-				sv->get_session(nearest_node->second.get_address())
-					.notify("introduce", arg.org_key, nearest_node->first,
-						arg.origin, arg.org_vector,i);
-			}
+	if(arg.origin == localhost){
+		// FIXME : it must retry treating again
+		return;
+	}
+	
+	int i = arg.level;
+	if(i==0 || i < matches){
+		boost::shared_ptr<const neighbor> as_neighbor
+			= shared_data::instance().get_nearest_neighbor(arg.org_key);
+		DEBUG_OUT("matched:%d\n", matches);
+		for(;i<=matches; ++i){
+			node.new_link(i, dir , arg.org_key, arg.origin);
+			sv->get_session(arg.origin.get_address())
+				.notify("link", arg.org_key, i, my_key, localhost);
 		}
 	}
+	if(i < shared_data::instance().maxlevel){
+		const boost::optional<std::pair<key, host> > nearest_node
+			= detail::nearest_node_info(my_key, node, inverse(dir), st);
+		if(nearest_node){
+			std::cout << nearest_node->first << ":" << nearest_node->second;
+			sv->get_session(nearest_node->second.get_address())
+				.notify("introduce", arg.org_key, nearest_node->first,
+					arg.origin, arg.org_vector,i);
+		}
+	}
+	
 }
 
 }

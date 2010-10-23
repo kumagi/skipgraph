@@ -12,6 +12,7 @@
 #include <boost/weak_ptr.hpp>
 #include <boost/optional.hpp>
 #include <boost/utility.hpp>
+#include <boost/io/ios_state.hpp>
 #include <mp/sync.h>
 #include "msgpack/rpc/server.h"
 #include "msgpack/rpc/client.h"
@@ -51,8 +52,6 @@ struct host{
 	MSGPACK_DEFINE(hostname,port);
 private:
 };
-
-
 std::ostream&  operator<<(std::ostream& ost, const host& h);
 
 
@@ -80,10 +79,11 @@ struct membership_vector{
 	{ return vector == rhs.vector;}
 	MSGPACK_DEFINE(vector); // serialize and deserialize ok
 };
-
+std::ostream&  operator<<(std::ostream& ost, const membership_vector& v);
 
 typedef std::string key;
 typedef std::string value;
+std::ostream& operator<<(std::ostream& ost, const std::vector<key>& v);
 
 direction get_direction(const key& lhs, const key& rhs);
 direction inverse(const direction& d);
@@ -114,6 +114,7 @@ public:
 class range{
 	key begin_,end_;
 	bool border_begin_,border_end_; // true = contain, false = not
+	friend std::ostream&  operator<<(std::ostream& ost, const range& r);
 public:
 	// construction
 	range():begin_(),end_(),border_begin_(false),border_end_(false){}
@@ -134,6 +135,7 @@ public:
 	}
 	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
 };
+std::ostream&  operator<<(std::ostream& ost, const range& r);
 
 class sg_node;
 //struct suspended_node;
@@ -181,6 +183,8 @@ struct shared_data: public singleton<shared_data>{
 	// membership_vector
 	membership_vector myvector;
 };
+
+std::ostream& operator<<(std::ostream& ost, shared_data& s);
 
 
 class sg_node{

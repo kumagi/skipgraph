@@ -117,46 +117,5 @@ nearest_node_info(const key& from_key, const sg_node& from_node,
 	}
 }
 
-boost::optional<std::pair<key,host> >
-nearest_node_info_level(const key& target,
-	const direction& dir, shared_data::ref_storage& st, int level){
-	// search innner nearest key
-	shared_data::storage_t::iterator relay = 
-		st->lower_bound(target);
-	if(relay->first == target){
-		boost::make_optional((std::make_pair(relay->first, 
-					shared_data::instance().get_host())));
-	}
-	if(relay == st->end()){
-		relay = st->upper_bound(target);
-		if(relay == st->end()){
-			assert(!"there must be some key saved!");
-		}
-	}
-	
-	const shared_data::storage_t::iterator next = (dir == left)
-		? boost::prior(relay) :boost::next(relay);
-	
-	const std::vector<boost::shared_ptr<const neighbor> >& nears
-		= relay->second.neighbors()[dir];
-	int i = nears.size();
-	if(next != st->end() && next->first != relay->first){
-		for(;i>=level;--i){
-			if(!nears[i])continue;
-			
-		}
-	}else{
-		for(;i>=level;--i){
-			if(!nears[i])continue;
-			if(detail::left_is_near(relay->first
-					,nears[i]->get_key(),target)){
-				// the new node is nearer than old connection
-				return boost::make_optional(
-					std::make_pair(nears[i]->get_key(), nears[i]->get_host()));
-			}
-		}
-		return NULL;
-	}
-}
 }// namespace detail
 }// namespace logic

@@ -3,6 +3,7 @@
 
 // external lib
 #include <boost/function.hpp>
+#include <boost/lexical_cast.hpp>
 
 // my include
 #include "skipgraph.h"
@@ -21,6 +22,7 @@ public:
 		// get the name of method
 		const std::string& method = req.method().as<std::string>();
 		// call the method
+		std::cerr << "@";
 		bool success = ref_table.call(method, &req, m_sv);
 		if(!success){ 
 			std::cerr << "undefined function ["
@@ -29,7 +31,7 @@ public:
 		}
 	}
 	void regist(const std::string& name,
-							reflection<msgpack::rpc::server>::reaction func){
+		reflection<msgpack::rpc::server>::reaction func){
 		ref_table.regist(name,func);
 	}
 private:
@@ -41,7 +43,7 @@ private:
 };
 
 #define REGIST(x) \
-	host.regist("##x##", logic::x<msgpack::rpc::request, msgpack::rpc::server>)
+	host.regist(std::string(#x), logic::x<msgpack::rpc::request, msgpack::rpc::server>)
 
 int main(int argc, char** argv){
 	settings& s = settings::instance();
@@ -55,15 +57,54 @@ int main(int argc, char** argv){
 
 	{// regist callbacks
 		REGIST(die);
+		REGIST(dump);
 		REGIST(search);
 		REGIST(found);
 		REGIST(notfound);
 		REGIST(link);
+		REGIST(introduce);
 		REGIST(treat);
 	}
 	sg_server.serve(&host);
 	sg_server.listen("127.0.0.1", s.myport);
+
+	shared_data::instance().set_host(s.myhost.hostname, s.myhost.port);
+	
+	shared_data::instance().myvector = membership_vector(s.vec);
+	
 	sg_server.start(4);
+
+	std::cout << s.master.hostname << ":" << s.master.port << std::endl;
+	if(s.master.hostname == "127.0.0.1" && s.master.port == s.myport){
+		shared_data::instance().myvector = membership_vector(0);
+		shared_data::instance().maxlevel = s.maxlevel;
+		// save minimum key
+		std::string keyname = "__node_master" + std::string(":") +
+			boost::lexical_cast<std::string>(s.myport);
+
+		shared_data::ref_storage st(shared_data::instance().storage);
+		st->insert(std::make_pair(keyname, 
+				sg_node("dummy", shared_data::instance().myvector,
+					shared_data::instance().maxlevel)));
+		
+	}else{
+		shared_data::instance().myvector = membership_vector(1);
+		shared_data::instance().maxlevel = s.maxlevel;
+		// treat minimum key
+		std::string keyname = "__node_"+ s.master.hostname + std::string(":") +
+			boost::lexical_cast<std::string>(s.myport);
+
+		shared_data::ref_storage st(shared_data::instance().storage);
+		st->insert(std::make_pair(keyname,
+				sg_node("dummy", shared_data::instance().myvector,
+					shared_data::instance().maxlevel)));
+		
+		sg_server.get_session(s.master.get_address())
+			.notify("treat",keyname, s.myhost, shared_data::instance().myvector);
+	}
+	
+	std::cout << shared_data::instance() << std::endl;
+	
 	
 	sg_server.join();// wait for server ends
 	return 0;
