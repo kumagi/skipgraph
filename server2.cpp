@@ -9,10 +9,9 @@ public:
 
 	void dispatch(rpc::request req)
 	{
+		// 呼ばれたらメッセージを表示するだけ
 		const std::string& method = req.method().as<std::string>();
-		msgpack::type::tuple<int, int> params(req.params());
-		std::cout << "message " << method << std::endl;
-		req.result(1);
+		std::cout << "message :" << method << std::endl;
 	}
 
 	rpc::server& listen(const std::string& host, uint16_t port)
@@ -22,17 +21,14 @@ public:
 		return m_svr;
 	}
 public:
-	myserver() : m_sp(m_svr.get_loop()) { }	 // イベントループを共有
+	myserver() { }	 // イベントループを共有
 		
 private:
 	msgpack::rpc::server m_svr;
-	msgpack::rpc::session_pool m_sp;
 };
 
 int main(void)
 {
 	myserver s;
-	
-	s.listen("0.0.0.0", 8080).start(4);		 // サーバを4スレッドで起動
-	sleep(10000);
+	s.listen("0.0.0.0", 8080).run(4);		 // サーバを4スレッドで起動
 }

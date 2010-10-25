@@ -6,22 +6,22 @@ namespace rpc { using namespace msgpack::rpc; }
 
 class myserver : public rpc::dispatcher {
 public:
-	// 中継先のサーバから応答が返ってきたら呼ばれる
-	static void callback(rpc::future f, rpc::request req)
-	{
-		req.result(f.get<int>());	 // ここで応答を返す
-	}
+	// // 中継先のサーバから応答が返ってきたら呼ばれる
+	// static void callback(rpc::future f, rpc::request req)
+	// {
+	// 	req.result(f.get<int>());	 // ここで応答を返す
+	// }
 
 	// クライアントから要求を受け取ったら呼ばれる
 	void dispatch(rpc::request req)
 	{
-		const std::string& method = req.method().as<std::string>();
-		msgpack::type::tuple<int, int> params(req.params());
+		// const std::string& method = req.method().as<std::string>();
+		// msgpack::type::tuple<int, int> params(req.params());
 
-		rpc::session s = m_sp.get_session("127.0.0.1", 8080); 
+		// rpc::session s = m_svr.get_session("127.0.0.1", 8080); 
 				
-		s.call(method, params.get<0>(), params.get<1>())
-			.attach_callback( mp::bind(&callback, _1, req) );
+		// s.call(method, params.get<0>(), params.get<1>());
+//			.attach_callback( mp::bind(&callback, _1, req) );
 	}
 
 	rpc::server& listen(const std::string& host, uint16_t port)
@@ -32,20 +32,18 @@ public:
 	}
 
 public:
-	myserver() : m_sp(m_svr.get_loop()) { }	 // イベントループを共有
+	myserver() {
+		// クライアントとして
+		rpc::session s = m_svr.get_session("127.0.0.1", 8080);
+		s.notify("hello1");
+		//s.call("hello2");
+	}
 private:
 	msgpack::rpc::server m_svr;
-	msgpack::rpc::session_pool m_sp;
 };
 
 int main(void)
 {
 	myserver s;
-	s.listen("0.0.0.0", 9090).start(4);		 // サーバを4スレッドで起動
-
-	// クライアントから要求を発行
-	msgpack::rpc::client c("127.0.0.1", 9090);
-	int result = c.call("add", 1, 2).get<int>();
-	
-	std::cout << "complete :"<< result << std::endl;;
+	s.listen("0.0.0.0", 9090).run(4);		 // サーバを4スレッドで起動
 }
