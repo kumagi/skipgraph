@@ -15,6 +15,8 @@ MSGPACK_RPC_OBJS=$(PATH_MSGPACK_RPC)/*.o
 target:skipgraph
 target:logic_test
 target:dumpcall
+target:server
+target:server2
 #target:testclient
 #target:obj_eval.i
 
@@ -35,10 +37,15 @@ sg_objects.o:sg_objects.hpp sg_objects.cc
 dumpcall.o: dumpcall.cpp
 	$(CXX) -c dumpcall.cpp -o $@ $(OPTS) $(WARNS)
 
-server:server.cpp
+server:server.o
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/
-server2:server2.cpp
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) $(PATH_MSGPACK_RPC)/*.o 
+server2:server2.o
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/
+server.o:server.cpp
+	$(CXX) -c server.cpp -o $@ $(OPTS) $(WARNS)
+server2.o:server2.cpp
+	$(CXX) -c server2.cpp -o $@ $(OPTS) $(WARNS)	
+
 
 skipgraph.o:skipgraph.cc skipgraph.h tcp_wrap.h sg_logic.hpp debug_macro.h sg_objects.hpp
 	$(CXX) -c skipgraph.cc -o $@ $(OPTS) $(WARNS) -I$(PATH_MSGPACK_RPC)
