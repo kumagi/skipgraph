@@ -1,29 +1,21 @@
 #include "msgpack/rpc/server.h"
 #include "msgpack/rpc/client.h"
 
+#include <cclog/cclog.h>
+#include <cclog/cclog_tty.h>
+
 using namespace mp::placeholders;
 namespace rpc { using namespace msgpack::rpc; }
 
+
+void returned(rpc::future f){
+	std::cout << "returned!" << std::endl;
+}
+
 class myserver : public rpc::dispatcher {
 public:
-	// // 中継先のサーバから応答が返ってきたら呼ばれる
-	// static void callback(rpc::future f, rpc::request req)
-	// {
-	// 	req.result(f.get<int>());	 // ここで応答を返す
-	// }
-
-	// クライアントから要求を受け取ったら呼ばれる
 	void dispatch(rpc::request req)
-	{
-		// const std::string& method = req.method().as<std::string>();
-		// msgpack::type::tuple<int, int> params(req.params());
-
-		// rpc::session s = m_svr.get_session("127.0.0.1", 8080); 
-				
-		// s.call(method, params.get<0>(), params.get<1>());
-//			.attach_callback( mp::bind(&callback, _1, req) );
-	}
-
+	{}
 	rpc::server& listen(const std::string& host, uint16_t port)
 	{
 		m_svr.serve(this);
@@ -35,8 +27,9 @@ public:
 	myserver() {
 		// クライアントとして
 		rpc::session s = m_svr.get_session("127.0.0.1", 8080);
+//		s.call("hello2").attach_callback(returned);
+		sleep(1);
 		s.notify("hello1");
-		//s.call("hello2");
 	}
 private:
 	msgpack::rpc::server m_svr;
@@ -44,6 +37,7 @@ private:
 
 int main(void)
 {
+	cclog::reset(new cclog_tty(cclog::TRACE, std::cerr));
 	myserver s;
 	s.listen("0.0.0.0", 9090).run(4);		 // サーバを4スレッドで起動
 }

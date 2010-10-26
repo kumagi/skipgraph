@@ -18,6 +18,7 @@
 #include "msgpack/rpc/client.h"
 
 #include "objlib.h"
+#include "debug_macro.h"
 #include "msgpack.hpp"
 
 
@@ -241,6 +242,7 @@ public:
 	//friend std::ostream& operator<<()
 private:
 	sg_node();
+	sg_node& operator=(const sg_node&);
 };
 /*
 struct suspended_node: public sg_node{

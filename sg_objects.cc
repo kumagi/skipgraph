@@ -10,17 +10,21 @@ boost::shared_ptr<neighbor> shared_data::get_neighbor(const key& k, const host& 
 	shared_data::ng_map_t::iterator it = ng->find(k);
 	shared_ptr<neighbor> ans;
 	if(it == ng->end()){
+		DEBUG_OUT("not found and create");
 		ans = shared_ptr<neighbor>
 			(new neighbor(k, h));
 		ng->insert(std::make_pair(k,boost::weak_ptr<neighbor>(ans)));
 		return shared_ptr<neighbor>(ans);
 	}else if(!(ans = it->second.lock())){
+
+		DEBUG_OUT("could not catch");
 		ng->erase(it);
 		ans = shared_ptr<neighbor>
 			(new neighbor(k, h));
 		ng->insert(std::make_pair(k,weak_ptr<neighbor>(ans)));
 		return shared_ptr<neighbor>(ans);
 	}else{
+		DEBUG_OUT("found");
 		return shared_ptr<neighbor>(it->second);
 	}
 }
@@ -36,6 +40,7 @@ boost::shared_ptr<const neighbor> shared_data::get_nearest_neighbor(const key& k
 	shared_ptr<neighbor> ans;
 	while(1){
 		if(it == ng->end()){ // search nearest
+			if(ng->empty()) return ans;
 			ans = ng->begin()->second.lock();
 			if(!ans){ ng->erase(it);}
 			else {break;}

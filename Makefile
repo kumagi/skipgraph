@@ -3,6 +3,7 @@ OPTS=-O0 -fexceptions -g
 LD=-L/usr/local/lib -lboost_program_options -lmsgpack -lmpio
 PATH_MSGPACK_RPC=../msgpack-rpc/cpp/src/msgpack/rpc
 TEST_LD= -lpthread $(LD)
+CCLOG_LD=../msgpack-rpc/cpp/src/cclog/*.o
 GTEST_INC= -I$(GTEST_DIR)/include -I$(GTEST_DIR)
 GTEST_DIR=/opt/google/gtest-1.5.0
 GMOCK_DIR=/opt/google/gmock-1.5.0
@@ -17,30 +18,32 @@ target:logic_test
 target:dumpcall
 target:server
 target:server2
-#target:testclient
+target:testclient
 #target:obj_eval.i
 
 skipgraph: skipgraph.o tcp_wrap.o logic_detail.o sg_objects.o
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/  $(CCLOG_LD)
 logic_test: logic_test.o gtest_main.a libgmock.a logic_detail.o sg_objects.o
-	$(CXX) $^ -o $@ $(GTEST_INC) $(TEST_LD) $(OPTS) $(WARNS) $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ 
+	$(CXX) $^ -o $@ $(GTEST_INC) $(TEST_LD) $(OPTS) $(WARNS) $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/  $(CCLOG_LD)
 	./logic_test $(NOTIFY)
-testclient: testclient.cpp
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/
+testclient: testclient.o sg_objects.o
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/  $(CCLOG_LD)
 dumpcall: dumpcall.o  tcp_wrap.o logic_detail.o sg_objects.o
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ $(CCLOG_LD)
 
 logic_detail.o:logic_detail.cc logic_detail.hpp
 	$(CXX) -c logic_detail.cc -o $@ $(OPTS) $(WARNS)
 sg_objects.o:sg_objects.hpp sg_objects.cc
 	$(CXX) -c sg_objects.cc -o $@ $(OPTS) $(WARNS)
+testclient.o:testclient.cpp
+	$(CXX) -c testclient.cpp -o $@ $(OPTS) $(WARNS)
 dumpcall.o: dumpcall.cpp
 	$(CXX) -c dumpcall.cpp -o $@ $(OPTS) $(WARNS)
 
 server:server.o
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/ $(CCLOG_LD)
 server2:server2.o
-	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/
+	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS) $(MSGPACK_RPC_OBJS) -I$(PATH_MSGPACK_RPC)/ $(CCLOG_LD)
 server.o:server.cpp
 	$(CXX) -c server.cpp -o $@ $(OPTS) $(WARNS)
 server2.o:server2.cpp

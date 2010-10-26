@@ -8,6 +8,10 @@
 // my include
 #include "skipgraph.h"
 #include "tcp_wrap.h"
+#include <cclog/cclog.h>
+#include <cclog/cclog_tty.h>
+
+
 
 using namespace mp::placeholders;
 namespace rpc { using namespace msgpack::rpc; }
@@ -46,6 +50,7 @@ private:
 	host.regist(std::string(#x), logic::x<msgpack::rpc::request, msgpack::rpc::server>)
 
 int main(int argc, char** argv){
+	cclog::reset(new cclog_tty(cclog::TRACE, std::cerr));
 	settings& s = settings::instance();
 	
 	// (argc argv) -> settings
@@ -56,6 +61,7 @@ int main(int argc, char** argv){
 	sg_host host(&sg_server); // main callback
 
 	{// regist callbacks
+		REGIST(set);
 		REGIST(die);
 		REGIST(dump);
 		REGIST(search);
@@ -66,7 +72,7 @@ int main(int argc, char** argv){
 		REGIST(treat);
 	}
 	sg_server.serve(&host);
-	sg_server.listen("127.0.0.1", s.myport);
+	sg_server.listen("0.0.0.0", s.myport);
 
 	shared_data::instance().set_host(s.myhost.hostname, s.myhost.port);
 	
@@ -88,7 +94,7 @@ int main(int argc, char** argv){
 					shared_data::instance().maxlevel)));
 		
 	}else{
-		shared_data::instance().myvector = membership_vector(1);
+		shared_data::instance().myvector = membership_vector(s.vec);
 		shared_data::instance().maxlevel = s.maxlevel;
 		// treat minimum key
 		std::string keyname = "__node_"+ s.master.hostname + std::string(":") +

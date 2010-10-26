@@ -73,6 +73,8 @@ void range_search(request* req, server* sv){
 	BLOCK("search:");
 	msg::range_search arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
+	
+	
 }
 
 template <typename request, typename server>
@@ -85,6 +87,7 @@ void die(request* req, server*){
 };
 template <typename request, typename server>
 void dump(request*, server*){
+	std::cerr << std::endl;
 	BLOCK("dump");
 	std::cerr << std::endl << shared_data::instance();
 };
@@ -157,6 +160,11 @@ void set(request* req, server* sv){
 					sv->get_session(locked_nearest->get_address())
 						.notify("treat", arg.set_key,  
 							localhost, shared_data::instance().myvector);
+					req->result(true);
+				}else{
+					st->insert(std::make_pair(arg.set_key, 
+							sg_node(arg.set_value, localmv,
+								shared_data::instance().maxlevel)));
 					req->result(true);
 				}
 			}
@@ -387,8 +395,9 @@ void introduce(request* req, server* sv){
 	if(i==0 || i < matches){
 		boost::shared_ptr<const neighbor> as_neighbor
 			= shared_data::instance().get_nearest_neighbor(arg.org_key);
+		const int maxloop = std::min(matches, shared_data::instance().maxlevel-1);
 		DEBUG_OUT("matched:%d\n", matches);
-		for(;i<=matches; ++i){
+		for(;i<=maxloop; ++i){
 			node.new_link(i, dir , arg.org_key, arg.origin);
 			sv->get_session(arg.origin.get_address())
 				.notify("link", arg.org_key, i, my_key, localhost);

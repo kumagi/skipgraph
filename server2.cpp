@@ -1,6 +1,8 @@
 #include <msgpack/rpc/server.h>
 #include <msgpack/rpc/client.h>
 
+#include <cclog/cclog.h>
+#include <cclog/cclog_tty.h>
 using namespace mp::placeholders;
 namespace rpc { using namespace msgpack::rpc; }
 
@@ -12,6 +14,7 @@ public:
 		// 呼ばれたらメッセージを表示するだけ
 		const std::string& method = req.method().as<std::string>();
 		std::cout << "message :" << method << std::endl;
+		req.result(1);
 	}
 
 	rpc::server& listen(const std::string& host, uint16_t port)
@@ -29,6 +32,7 @@ private:
 
 int main(void)
 {
+	cclog::reset(new cclog_tty(cclog::TRACE, std::cout));
 	myserver s;
 	s.listen("0.0.0.0", 8080).run(4);		 // サーバを4スレッドで起動
 }

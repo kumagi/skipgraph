@@ -17,9 +17,13 @@
 #include "sg_objects.hpp"
 #include "msgpack_macro.h"
 
+#include <cclog/cclog.h>
+#include <cclog/cclog_tty.h>
 
 int main(int argc, char** argv){
 
+	cclog::reset(new cclog_tty(cclog::TRACE, std::cerr));
+	
 	boost::program_options::options_description opt("options");
 	std::string targetip;
 	unsigned short targetport;
