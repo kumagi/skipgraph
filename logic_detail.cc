@@ -80,12 +80,6 @@ bool is_edge_key(const key& k){
 boost::optional<std::pair<key,host> >
 nearest_node_info(const key& from_key, const sg_node& from_node,
 	const direction& dir, shared_data::ref_storage& st){
-	/*
-	 * B is other node's key
-	 * A  [B]  C  D
-	 * D's left may be B because inner connection is omitted
-	 * so select [B] or C which is nearer
-	 */
 	shared_data::storage_t::iterator relay = 
 		st->lower_bound(from_key);
 	if(relay == st->end()){

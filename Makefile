@@ -19,6 +19,7 @@ target:dumpcall
 target:server
 target:server2
 target:testclient
+target:striped_sync_test
 #target:obj_eval.i
 
 skipgraph: skipgraph.o tcp_wrap.o logic_detail.o sg_objects.o
@@ -30,6 +31,9 @@ testclient: testclient.o sg_objects.o
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/  $(CCLOG_LD)
 dumpcall: dumpcall.o  tcp_wrap.o logic_detail.o sg_objects.o
 	$(CXX) $^ -o $@ $(LD) $(OPTS) $(WARNS)  $(PATH_MSGPACK_RPC)/*.o -I$(PATH_MSGPACK_RPC)/ $(CCLOG_LD)
+striped_sync_test:striped_sync_test.cc
+	$(CXX) $^ -o $@ $(LD) -lboost_thread -g
+	./striped_sync_test
 
 logic_detail.o:logic_detail.cc logic_detail.hpp
 	$(CXX) -c logic_detail.cc -o $@ $(OPTS) $(WARNS)

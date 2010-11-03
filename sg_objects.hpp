@@ -21,9 +21,11 @@
 #include "debug_macro.h"
 #include "msgpack.hpp"
 
+#include "sl/sl.hpp"
+#include "striped_sync.hpp"
 
 enum direction{
-	left = 0,
+left = 0,
 	right = 1,
 };
 
@@ -98,95 +100,47 @@ public:
 	neighbor(const key& _key,const host& _ad)
 		:key_(_key),ad_(_ad){}
 
-	// getter
-	const key& get_key()const{ return key_; }
-	const host& get_host()const{ return ad_; }
-	const msgpack::rpc::address get_address()const{ return ad_.get_address(); }
-
-	/*
-	struct hash {
-		size_t operator()(const neighbor& a)const {
-			return mp::hash<std::string>()(a.get_key()) +
-				msgpack::rpc::address::hash()(a.get_address());
-		};
+		// getter
+		const key& get_key()const{ return key_; }
+		const host& get_host()const{ return ad_; }
+		const msgpack::rpc::address get_address()const{ return ad_.get_address(); }
+		
+		/*
+		struct hash {
+	size_t operator()(const neighbor& a)const {
+		return mp::hash<std::string>()(a.get_key()) +
+			msgpack::rpc::address::hash()(a.get_address());
+				};
 		};*/
-};
+		};
 
 class range{
-	key begin_,end_;
-	bool border_begin_,border_end_; // true = contain, false = not
-	friend std::ostream&  operator<<(std::ostream& ost, const range& r);
+key begin_,end_;
+bool border_begin_,border_end_; // true = contain, false = not
+friend std::ostream&  operator<<(std::ostream& ost, const range& r);
 public:
-	// construction
-	range():begin_(),end_(),border_begin_(false),border_end_(false){}
-	range(const range& org)
+// construction
+range():begin_(),end_(),border_begin_(false),border_end_(false){}
+																	range(const range& org)
 		:begin_(org.begin_),
 		 end_(org.end_),
 		 border_begin_(org.border_begin_),
 		 border_end_(org.border_end_){}
-	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
+																	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
 		:begin_(_begin),end_(_end),border_begin_(_border_begin),border_end_(_border_end){}
-
-	// checker
-	bool contain(const key& t)const{
-		if(begin_ == t && border_begin_) return true;
-		if(end_ == t && border_end_) return true;
-		if(begin_ < t && t < end_) return true;
-		return false;
-	}
-	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
+																	
+																	// checker
+																	bool contain(const key& t)const{
+if(begin_ == t && border_begin_) return true;
+if(end_ == t && border_end_) return true;
+if(begin_ < t && t < end_) return true;
+return false;
+}
+		MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
 };
 std::ostream&  operator<<(std::ostream& ost, const range& r);
 
 class sg_node;
-//struct suspended_node;
-
-
-struct shared_data: public singleton<shared_data>{
-	int maxlevel;
-	// initializer
-	shared_data():maxlevel(8){}
-	void init(){
-		ref_storage rs(storage); rs->clear();
-		ref_ng_map rn(ngmap); rn->clear();
-	}
-	// selfdata
-	host myhost;
-	void set_host(const std::string& name, const uint16_t& port){
-		myhost = host(name,port);
-	}
-	const host& get_host()const{return myhost;}
-
-	void storage_dump()const;
-
-	// storage
-	typedef std::map<key,sg_node> storage_t;
-	typedef mp::sync<storage_t> sync_storage_t;
-	typedef sync_storage_t::ref ref_storage;
-	sync_storage_t storage;
-
-	/* neighbors */
-	typedef boost::unordered_map<key, boost::weak_ptr<neighbor> > ng_map_t;
-	typedef mp::sync<ng_map_t> sync_ng_map_t;
-	typedef sync_ng_map_t::ref ref_ng_map;
-	sync_ng_map_t ngmap;
-	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
-	boost::shared_ptr<const neighbor> get_nearest_neighbor(const key& k);
-
-	/*
-	// susupended storage
-	typedef boost::unordered_map<key, suspended_node> suspended_t;
-	typedef mp::sync<suspended_t> sync_suspended_t;
-	typedef sync_suspended_t::ref ref_suspended;
-	sync_suspended_t suspended;
-	*/
-	
-	// membership_vector
-	membership_vector myvector;
-};
-
-std::ostream& operator<<(std::ostream& ost, shared_data& s);
-
 
 class sg_node{
 	value value_;
@@ -233,8 +187,8 @@ public:
 	}
 	void new_link(int level, direction left_or_right, const key& k,
 								const host& h){
-		next_keys[left_or_right][level] = shared_data::instance()
-			.get_neighbor(k,h);
+//		next_keys[left_or_right][level] = shared_data::instance()
+//			.get_neighbor(k,h);
 	}
 	size_t get_maxlevel()const{
 		return next_keys[left].size();
@@ -244,6 +198,54 @@ private:
 	sg_node();
 	sg_node& operator=(const sg_node&);
 };
+//struct suspended_node;
+
+
+struct shared_data: public singleton<shared_data>{
+	int maxlevel;
+// initializer
+	shared_data():maxlevel(8){}
+	void init(){
+		ref_storage rs(storage); rs->clear();
+		ref_ng_map rn(ngmap); rn->clear();
+	}
+// selfdata
+	host myhost;
+	void set_host(const std::string& name, const uint16_t& port){
+		myhost = host(name,port);
+	}
+	const host& get_host()const{return myhost;}
+
+	void storage_dump()const;
+
+// storage
+	typedef sl<key,sg_node> storage_t;
+	typedef mp::sync<storage_t> sync_storage_t;
+	typedef sync_storage_t::ref ref_storage;
+	sync_storage_t storage;
+
+	/* neighbors */
+	typedef boost::unordered_map<key, boost::weak_ptr<neighbor> > ng_map_t;
+	typedef mp::sync<ng_map_t> sync_ng_map_t;
+	typedef sync_ng_map_t::ref ref_ng_map;
+	sync_ng_map_t ngmap;
+	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+	boost::shared_ptr<const neighbor> get_nearest_neighbor(const key& k);
+
+	/*
+	// susupended storage
+	typedef boost::unordered_map<key, suspended_node> suspended_t;
+	typedef mp::sync<suspended_t> sync_suspended_t;
+	typedef sync_suspended_t::ref ref_suspended;
+	sync_suspended_t suspended;
+	*/
+	
+	// membership_vector
+	membership_vector myvector;
+};
+
+std::ostream& operator<<(std::ostream& ost, shared_data& s);
+
 /*
 struct suspended_node: public sg_node{
 	bool con[2];

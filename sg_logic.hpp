@@ -96,86 +96,7 @@ template <typename request, typename server>
 void set(request* req, server* sv){
 	BLOCK("set");
 	const msg::set arg(req->params());
-	{
-		std::pair<const key,sg_node>* nearest
-			= detail::get_nearest_node(arg.set_key); // search nearest node
-		if(nearest != NULL){ // something found!
-			if(nearest->first == arg.set_key){ // already exist in this node
-				shared_data::ref_storage st(shared_data::instance().storage);
-				//(*st)[arg.set_key] = arg.set_value;
-				st->erase(arg.set_key);
-				st->insert(std::make_pair(arg.set_key,
-						sg_node(arg.set_value, shared_data::instance().myvector,
-							shared_data::instance().maxlevel)));
-				req->result(true);
-				return;
-			}else{ // other node -> relay
-				// alias
-				const host& localhost = shared_data::instance().get_host();
-				const membership_vector& localmv
-					(shared_data::instance().myvector);
-				shared_data::ref_storage st(shared_data::instance().storage);
-
-				// search nearest
-				boost::shared_ptr<const neighbor> locked_nearest
-					= nearest->second.search_nearest(nearest->first,arg.set_key);
-				if(locked_nearest && (locked_nearest->get_key() == arg.set_key)){
-					// matched with already seted key in other node
-					// replace it!
-					st->insert(std::make_pair(arg.set_key,
-							sg_node(arg.set_value, shared_data::instance().myvector,
-								shared_data::instance().maxlevel)));
-					sv->get_session(locked_nearest->get_address())
-						.notify("treat", arg.set_key, localhost, localmv);
-					req->result(true);
-					return;
-				}
-				
-				if(!locked_nearest){
-					const direction dir(get_direction(nearest->first, arg.set_key));
-					if(nearest->second.neighbors()[dir][0]){
-						const key& nearest_first = nearest->first;
-						const boost::optional<std::pair<key, host> > nearest_node =
-							detail::nearest_node_info(nearest_first,
-								nearest->second, dir, st);
-						if(nearest_node){
-							std::pair<key, host> data = *nearest_node;
-							sv->get_session(nearest_node->second.get_address())
-								.notify("introduce", arg.set_key, nearest_node->first,
-									localhost, localmv, 0);
-						}
-						st->insert(std::make_pair(arg.set_key, 
-								sg_node(arg.set_value, localmv,
-									shared_data::instance().maxlevel)));
-						req->result(true);
-						return;
-					}
-					// select some neighbor( it may not be efficient
-					locked_nearest = (shared_data::instance().get_nearest_neighbor(arg.set_key));
-				}
-				if(locked_nearest){ // send treat
-					st->insert(std::make_pair(arg.set_key, 
-							sg_node(arg.set_value, localmv,
-								shared_data::instance().maxlevel)));
-					sv->get_session(locked_nearest->get_address())
-						.notify("treat", arg.set_key,  
-							localhost, shared_data::instance().myvector);
-					req->result(true);
-				}else{
-					st->insert(std::make_pair(arg.set_key, 
-							sg_node(arg.set_value, localmv,
-								shared_data::instance().maxlevel)));
-					req->result(true);
-				}
-			}
-		}else { // not found == it's first key!
-			shared_data::ref_storage st(shared_data::instance().storage);
-			st->insert(std::make_pair(arg.set_key,
-					sg_node(arg.set_value, shared_data::instance().myvector,
-						shared_data::instance().maxlevel))); 
-			req->result(true);
-		}
-	}
+	
 }
 
 template <typename request, typename server>
@@ -184,7 +105,7 @@ void search(request* req, server* sv){
 	msg::search arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
 	shared_data::ref_storage st(shared_data::instance().storage);
-	shared_data::storage_t::const_iterator node = st->find(arg.target_key);
+	shared_data::storage_t::iterator node = st->get(arg.target_key);
 	if(node != st->end()) { // found it
 		DEBUG_OUT("found!");
 		sv->get_session
@@ -239,7 +160,7 @@ void link(request* req,server* sv){
 	const direction dir = get_direction(arg.target_key, arg.org_key);
 	
 	shared_data::ref_storage st(shared_data::instance().storage);
-	shared_data::storage_t::iterator iter = st->find(arg.target_key);
+	shared_data::storage_t::iterator iter = st->geta(arg.target_key);
 	if(iter != st->end()){
 		const shared_data::storage_t::iterator next = (dir == left)
 			? boost::prior(iter) :boost::next(iter);
