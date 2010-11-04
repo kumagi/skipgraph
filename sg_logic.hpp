@@ -228,6 +228,7 @@ void treat(request* req, server* sv){
 								, arg.org_key, from_left->get_key()
 								, arg.origin, arg.org_vector,0);
 						for(int i=0;i<link_for;++i){
+						its.first->second.neighbors()[right][i] = newnbr;							
 							sv->get_session(arg.origin.get_address())
 								.call("link", arg.org_key, i, its.first->first, localhost);
 						}
@@ -247,6 +248,7 @@ void treat(request* req, server* sv){
 								, arg.org_key, from_right->get_key()
 								, arg.origin, arg.org_vector,0);
 						for(int i=0;i<=link_for;++i){
+							its.second->second.neighbors()[left][i] = newnbr;
 							sv->get_session(arg.origin.get_address())
 								.call("link", arg.org_key, i, its.second->first, localhost);
 						}
@@ -295,6 +297,7 @@ void treat(request* req, server* sv){
 							.call("link", arg.org_key, i, its.second->first, localhost);
 					}
 				}
+				DEBUG_OUT("ohhaa--");
 				if(its.first->second.is_valid()
 					&& its.first->second.neighbors()[left][0]){
 					sv->get_session(its.first->second.neighbors()[left][0]->get_address())
