@@ -88,10 +88,9 @@ int main(int argc, char** argv){
 		std::string keyname = "__node_master" + std::string(":") +
 			boost::lexical_cast<std::string>(s.myport);
 
-		shared_data::ref_storage st(shared_data::instance().storage);
-		st->insert(std::make_pair(keyname, 
-				sg_node("dummy", shared_data::instance().myvector,
-					shared_data::instance().maxlevel)));
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+		st.add(keyname, sg_node("dummy", shared_data::instance().myvector,
+					shared_data::instance().maxlevel));
 		
 	}else{
 		shared_data::instance().myvector = membership_vector(s.vec);
@@ -100,10 +99,10 @@ int main(int argc, char** argv){
 		std::string keyname = "__node_"+ s.master.hostname + std::string(":") +
 			boost::lexical_cast<std::string>(s.myport);
 
-		shared_data::ref_storage st(shared_data::instance().storage);
-		st->insert(std::make_pair(keyname,
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+		st.add(keyname,
 				sg_node("dummy", shared_data::instance().myvector,
-					shared_data::instance().maxlevel)));
+					shared_data::instance().maxlevel));
 		
 		sg_server.get_session(s.master.get_address())
 			.notify("treat",keyname, s.myhost, shared_data::instance().myvector);

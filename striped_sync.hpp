@@ -10,10 +10,20 @@
 template <typename T, int size = 8>
 class striped_sync : public boost::noncopyable{
 public:
-	
+	striped_sync() : m_obj() { }
+	template <typename A1>
+	striped_sync(A1 a1) : m_obj(a1) { }
+	template <typename A1, typename A2>
+	striped_sync(A1 a1, A2 a2) : m_obj(a1, a2) { }
+	template <typename A1, typename A2, typename A3>
+	striped_sync(A1 a1, A2 a2, A3 a3) : m_obj(a1, a2, a3) { }
+	template <typename A1, typename A2, typename A3, typename A4>
+	striped_sync(A1 a1, A2 a2, A3 a3, A4 a4) : m_obj(a1, a2, a3, a4) { }
+	template <typename A1, typename A2, typename A3, typename A4, typename A5>
+	striped_sync(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5) : m_obj(a1, a2, a3, a4, a5) { }
 	class ref : public boost::noncopyable{
 	public:
-		ref(striped_sync<T,size>& obj, int hash):m_hash(hash),m_ref(&obj)
+		ref(striped_sync<T,size>& obj, size_t hash):m_hash(hash),m_ref(&obj)
 		{
 			obj.m_lock[hash%size].lock();
 		}			
@@ -31,17 +41,18 @@ public:
 		const T* operator->() const { return &operator*(); }
 		boost::mutex& get_mutex(){ return m_ref->m_mutex;}
 	private:
-		int m_hash;
+		size_t m_hash;
 		striped_sync<T,size>* m_ref;
 	};
-
+	
 	class multi_ref : public boost::noncopyable{
-		multi_ref(striped_sync<T,size>& obj, const std::vector<int>& hash)
+	public:
+		multi_ref(striped_sync<T,size>& obj, const std::vector<size_t>& hash)
 			:m_hash(hash),m_ref(&obj)
 		{
 			std::sort(m_hash.begin(),m_hash.end());
 			m_hash.erase(std::unique(m_hash.begin(),m_hash.end()),m_hash.end());
-			for(int i=0;i<m_hash.size();i++){
+			for(size_t i=0;i<m_hash.size();i++){
 				obj.m_lock[m_hash[i]%size].lock();
 			}
 		}
@@ -57,10 +68,12 @@ public:
 		const T* operator->() const { return &operator*(); }
 		boost::mutex& get_mutex(){ return m_ref->m_mutex;}
 	private:
-		std::vector<int> m_hash;
+		std::vector<size_t> m_hash;
 		striped_sync<T,size>* m_ref;
 	};
 	
+	T& get_ref(){return m_obj;}
+	T const& get_ref() const {return m_obj;}
 private:
 	T m_obj;
 	boost::array<boost::mutex, size> m_lock;

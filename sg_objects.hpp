@@ -13,6 +13,7 @@
 #include <boost/optional.hpp>
 #include <boost/utility.hpp>
 #include <boost/io/ios_state.hpp>
+#include <boost/functional/hash.hpp>
 #include <mp/sync.h>
 #include "msgpack/rpc/server.h"
 #include "msgpack/rpc/client.h"
@@ -86,6 +87,10 @@ std::ostream&  operator<<(std::ostream& ost, const membership_vector& v);
 
 typedef std::string key;
 typedef std::string value;
+
+static key min_key("0");
+static key max_key("~~~~~");
+
 std::ostream& operator<<(std::ostream& ost, const std::vector<key>& v);
 
 direction get_direction(const key& lhs, const key& rhs);
@@ -97,46 +102,47 @@ class neighbor {
 	host ad_;
 	//friend struct hash;
 public:
-	neighbor(const key& _key,const host& _ad)
+	explicit neighbor(const key& _key,const host& _ad = host())
 		:key_(_key),ad_(_ad){}
 
-		// getter
-		const key& get_key()const{ return key_; }
-		const host& get_host()const{ return ad_; }
-		const msgpack::rpc::address get_address()const{ return ad_.get_address(); }
+	// getter
+	const key& get_key()const{ return key_; }
+	const host& get_host()const{ return ad_; }
+	const msgpack::rpc::address get_address()const{ return ad_.get_address(); }
 		
-		/*
+	/*
 		struct hash {
-	size_t operator()(const neighbor& a)const {
+		size_t operator()(const neighbor& a)const {
 		return mp::hash<std::string>()(a.get_key()) +
-			msgpack::rpc::address::hash()(a.get_address());
-				};
-		};*/
+		msgpack::rpc::address::hash()(a.get_address());
 		};
+		};*/
+};
+typedef boost::shared_ptr<neighbor> shared_neighbor;
 
 class range{
-key begin_,end_;
-bool border_begin_,border_end_; // true = contain, false = not
-friend std::ostream&  operator<<(std::ostream& ost, const range& r);
+	key begin_,end_;
+	bool border_begin_,border_end_; // true = contain, false = not
+	friend std::ostream&  operator<<(std::ostream& ost, const range& r);
 public:
 // construction
-range():begin_(),end_(),border_begin_(false),border_end_(false){}
-																	range(const range& org)
+	range():begin_(),end_(),border_begin_(false),border_end_(false){}
+	range(const range& org)
 		:begin_(org.begin_),
 		 end_(org.end_),
 		 border_begin_(org.border_begin_),
 		 border_end_(org.border_end_){}
-																	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
+	range(const key& _begin, const key& _end, bool _border_begin,bool _border_end)
 		:begin_(_begin),end_(_end),border_begin_(_border_begin),border_end_(_border_end){}
 																	
-																	// checker
-																	bool contain(const key& t)const{
-if(begin_ == t && border_begin_) return true;
-if(end_ == t && border_end_) return true;
-if(begin_ < t && t < end_) return true;
-return false;
-}
-		MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
+	// checker
+	bool contain(const key& t)const{
+		if(begin_ == t && border_begin_) return true;
+		if(end_ == t && border_end_) return true;
+		if(begin_ < t && t < end_) return true;
+		return false;
+	}
+	MSGPACK_DEFINE(begin_,end_,border_begin_,border_end_)
 };
 std::ostream&  operator<<(std::ostream& ost, const range& r);
 
@@ -146,13 +152,22 @@ class sg_node{
 	value value_;
 	std::vector<boost::shared_ptr<const neighbor> > next_keys[2]; // left=0, right=1
 	membership_vector vec_;
+	bool valid;
 public:
+	sg_node():valid(false){
+		 next_keys[left].reserve(64);
+		 next_keys[right].reserve(64);
+		 for(int i=0;i<64;i++){
+			 next_keys[left].push_back(boost::shared_ptr<const neighbor>());
+			 next_keys[right].push_back(boost::shared_ptr<const neighbor>());
+		 }
+	}
 	void set_vector(const membership_vector& mv){
 		vec_ = mv;
 	}
 	const membership_vector& get_vector()const{ return vec_;}
 	sg_node(const value& _value, const membership_vector& mv, int level)
-		:value_(_value),vec_(mv){
+		:value_(_value),vec_(mv),valid(true){
 		next_keys[left].reserve(level);
 		next_keys[right].reserve(level);
 		for(int i=0;i<level;i++){
@@ -160,6 +175,7 @@ public:
 			next_keys[right].push_back(boost::shared_ptr<const neighbor>());
 		}
 	}
+	bool is_valid()const{return valid;}
 	
 	boost::shared_ptr<const neighbor>
 	search_nearest(const key& mykey,const key& target)const{
@@ -185,17 +201,17 @@ public:
 	const std::vector<boost::shared_ptr<const neighbor> >* neighbors()const{
 		return next_keys;
 	}
-	void new_link(int level, direction left_or_right, const key& k,
-								const host& h){
+//void new_link(int level, direction left_or_right, const key& k,
+//								const host& h){
 //		next_keys[left_or_right][level] = shared_data::instance()
 //			.get_neighbor(k,h);
-	}
+//	}
 	size_t get_maxlevel()const{
 		return next_keys[left].size();
 	}
 	//friend std::ostream& operator<<()
 private:
-	sg_node();
+	
 	sg_node& operator=(const sg_node&);
 };
 //struct suspended_node;
@@ -204,9 +220,9 @@ private:
 struct shared_data: public singleton<shared_data>{
 	int maxlevel;
 // initializer
-	shared_data():maxlevel(8){}
+	shared_data():maxlevel(8),storage(min_key,max_key){}
 	void init(){
-		ref_storage rs(storage); rs->clear();
+		ref_storage rs(storage,0); rs->clear();
 		ref_ng_map rn(ngmap); rn->clear();
 	}
 // selfdata
@@ -220,8 +236,10 @@ struct shared_data: public singleton<shared_data>{
 
 // storage
 	typedef sl<key,sg_node> storage_t;
-	typedef mp::sync<storage_t> sync_storage_t;
+	typedef std::pair<sl<key,sg_node>::iterator,sl<key,sg_node>::iterator> both_side;
+	typedef striped_sync<storage_t,32> sync_storage_t;
 	typedef sync_storage_t::ref ref_storage;
+	typedef sync_storage_t::multi_ref multi_ref_storage;
 	sync_storage_t storage;
 
 	/* neighbors */
@@ -229,9 +247,10 @@ struct shared_data: public singleton<shared_data>{
 	typedef mp::sync<ng_map_t> sync_ng_map_t;
 	typedef sync_ng_map_t::ref ref_ng_map;
 	sync_ng_map_t ngmap;
-	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h);
+	
+	boost::shared_ptr<neighbor> get_neighbor(const key& k, const host& h = host());
 	boost::shared_ptr<const neighbor> get_nearest_neighbor(const key& k);
-
+	
 	/*
 	// susupended storage
 	typedef boost::unordered_map<key, suspended_node> suspended_t;
@@ -243,6 +262,7 @@ struct shared_data: public singleton<shared_data>{
 	// membership_vector
 	membership_vector myvector;
 };
+std::vector<size_t> get_hash_of_lock(shared_data::both_side& its);
 
 std::ostream& operator<<(std::ostream& ost, shared_data& s);
 

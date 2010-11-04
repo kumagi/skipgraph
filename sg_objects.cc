@@ -53,7 +53,13 @@ boost::shared_ptr<const neighbor> shared_data::get_nearest_neighbor(const key& k
 	return ans;
 }
 
-
+std::vector<size_t> get_hash_of_lock(shared_data::both_side& its){
+	const size_t left = boost::hash_value(its.first->first); 
+	const size_t right = boost::hash_value(its.second->first);
+	std::vector<size_t> v(2);
+	v.push_back(left);v.push_back(right);
+	return v;
+}
 
 direction get_direction(const key& lhs, const key& rhs){
 	assert(lhs != rhs);
@@ -127,11 +133,11 @@ std::ostream& operator<<(std::ostream& ost, shared_data& s){
 			<< "vector:" << s.myvector << std::endl;
 	ost << "storages [" << std::endl;
 	{
-		shared_data::ref_storage st(s.storage);
-		for(shared_data::storage_t::iterator it = st->begin();
-				it != st->end();
+		shared_data::storage_t& st(s.storage.get_ref());
+		for(shared_data::storage_t::iterator it = st.begin();
+				it != st.end();
 				++it){
-			ost << *it  << std::endl;
+			//ost << *it  << std::endl;
 		}
 		ost << "]" << std::endl;
 	}
@@ -152,11 +158,11 @@ std::ostream& operator<<(std::ostream& ost, shared_data& s){
 }
 
 void shared_data::storage_dump()const{
-	ref_storage st(shared_data::instance().storage);
-	storage_t::iterator it = st->begin();
+	storage_t& st(shared_data::instance().storage.get_ref());
+	storage_t::iterator it = st.begin();
 	std::cout << "dump[";
-	while(it != st->end()){
-		std::cout << *it;
+	while(it != st.end()){
+		std::cout << it->first << "value:" << it->second;
 		++it;
 	}
 	std::cout << "]";

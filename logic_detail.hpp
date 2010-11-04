@@ -5,6 +5,9 @@
 namespace logic{
 namespace detail{
 
+void zip_two_node(const key& left_key, sg_node* left_node
+									, const key& right_key, sg_node* right_node);
+
 int string_distance(const std::string& lhs, const std::string& rhs);
 bool left_is_near(const key& org, const key& lhs, const key& rhs);
 const key& which_near(const key& org, const key& lhs, const key& rhs);
