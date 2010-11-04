@@ -102,6 +102,7 @@ TEST(_0, settings){
 const host& localhost(shared_data::instance().get_host());
 const host mockhost("133.21.1.1",11212); //host
 const host mockhost2("213.232.121.12",1443);
+const membership_vector mockvector1(2);
 const membership_vector mockvector2(6);
 
 TEST(_1, set_first_key){
@@ -134,7 +135,7 @@ TEST(_2, treat_to_firstkey){
 	// request's input/output
 	// treat operation
 	eval::object<key,host,membership_vector>
-		obj("k2",mockhost, membership_vector(2));
+		obj("k2",mockhost, mockvector1);
 	
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
@@ -350,7 +351,6 @@ TEST(_7, expect_introduce){
 	}
 }
 
-
 TEST(_8, introduce_key){
 		// k1       k2.2         k3
 		// k1  [k2] k2.2<-[k2.5] k3
@@ -365,12 +365,12 @@ TEST(_8, introduce_key){
 
 	StrictMock<mock_server> sv;
 	StrictMock<mock_session> sn1;
-	EXPECT_CALL(sn1, notify("introduce", "k2.5", "k2", mockhost2, mockvector2, 2));
+	EXPECT_CALL(sn1, call("introduce", "k2.5", "k2", mockhost2, mockvector2, 1));
 	EXPECT_CALL(sv, get_session(mockhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	StrictMock<mock_session> sn2;
-	EXPECT_CALL(sn2, notify("link", "k2.5", 0, "k2.2", localhost));
-	EXPECT_CALL(sn2, notify("link", "k2.5", 1, "k2.2", localhost));
+	EXPECT_CALL(sn2, call("link", "k2.5", 0, "k2.2", localhost));
+	EXPECT_CALL(sn2, call("link", "k2.5", 1, "k2.2", localhost));
 	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
 		.WillRepeatedly(ReturnRef(sn2));
 	
@@ -389,6 +389,7 @@ TEST(_8, introduce_key){
 		
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]);
+		DEBUG_OUT("key %s \n", st.get("k2.2")->second.neighbors()[right][1]->get_key().c_str() );
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.5");
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_key() == "k2.5");
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_host() == mockhost2);
@@ -397,12 +398,12 @@ TEST(_8, introduce_key){
 }
 
 
-/*
 TEST(_9, add_more_key){
-		// k1       k2.2  k2.3         k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
-
+	//                 new
+	// k1       k2.2  k2.3         k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
+	
 	// request's input/output
 	eval::object<const key,const value>
 		obj("k2.3","v2.3");
@@ -413,45 +414,50 @@ TEST(_9, add_more_key){
 
 	mock_server sv;
 	mock_session sn1;
-	EXPECT_CALL(sn1, notify("treat", "k2.3",
-			localhost, shared_data::instance().myvector));
+	EXPECT_CALL(sn1, call("introduce", "k2.3", "k2.5", 
+			localhost, shared_data::instance().myvector, 0));
 	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	
 	// call
 	logic::set(&req, &sv);
 	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_EQ(st->size(),4U);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][2]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[left][2]);
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
 		
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_host() == mockhost2);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[left][2]);
 		
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][2]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_host() == localhost);
+		
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][0]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][1]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][2]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][0]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][1]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][2]->get_host() == localhost);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][2]);
 	}
 }
 
+
 TEST(_10, link_to_left_key){
-		// k1       k2.2  k2.3         k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
+	//                     link
+	// k1       k2.2  k2.3         k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
 	// request's input/output
 	eval::object<const key,int,const key, host>
 		obj("k2.3", 0, "k2.5", mockhost2);
@@ -464,32 +470,31 @@ TEST(_10, link_to_left_key){
 	// call
 	logic::link(&req, &sv);
 	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_EQ(st->size(),4U);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][2]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[left][2]);
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[left][2]);
 		
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_host() == mockhost2);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_host() == localhost);
 		
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][2]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][0]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][1]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][2]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][2]);
 	}
 }
 
@@ -503,42 +508,43 @@ TEST(_11, introduce_to_left_key){
 	EXPECT_TRUE(logic::detail::left_is_near("k2.2","k2.3","k2.5"));
 	eval::object<const key,const key, host, membership_vector, int >
 		obj("k2.2", "k2.3",
-			localhost, shared_data::instance().myvector, 0);
+			localhost, shared_data::instance().myvector, 1);
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
+	EXPECT_CALL(req, result(true));
 	
 	mock_server sv;
 	
 	// call
 	logic::introduce(&req, &sv);
 	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_EQ(st->size(),4U);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][2]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[left][2]);
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[left][2]);
 		
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_host() == mockhost2);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_host() == localhost);
 		
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][2]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][0]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][1]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][2]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][2]);
 	}
 }
 
@@ -561,38 +567,39 @@ TEST(_12, introduce_to_right_key){
 	// call
 	logic::introduce(&req, &sv);
 	{
-		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_EQ(st->size(),4U);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[right][2]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
-		EXPECT_TRUE(!st->find("k3")->second.neighbors()[left][2]);
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][1]);
+		EXPECT_TRUE(!st.get("k3")->second.neighbors()[right][2]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]);
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][2]->get_key() == "k2.3");
 		
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][1]->get_host() == mockhost2);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_host() == localhost);
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][1]->get_host() == localhost);
 		
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][0]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[left][2]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]);
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st->find("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][1]);
-		EXPECT_TRUE(!st->find("k2.3")->second.neighbors()[right][2]);
+		
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][0]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][1]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[left][2]->get_key() == "k2.2");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][1]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][2]->get_key() == "k2.3");
 	}
 }
 
 const host mockhost3("1.2.3.4",121);
 const membership_vector mockvector3(1);
 
+/*
 TEST(_13, more_middle_key){
 		// k1       k2.2           k2.3         k3
 		// k1  [k2] k2.2   new!    k2.3  [k2.5] k3
@@ -609,19 +616,19 @@ TEST(_13, more_middle_key){
 	StrictMock<mock_server> sv;
 
 	StrictMock<mock_session> sn1;
-	EXPECT_CALL(sn1, notify
+	EXPECT_CALL(sn1, call
 		("link", "k2.22", 0, "k2.3", localhost));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	
 	StrictMock<mock_session> sn2;
-	EXPECT_CALL(sn2, notify
+	EXPECT_CALL(sn2, call
 		("introduce", "k2.22", "k2.2", mockhost3, mockvector3, 0));
 	EXPECT_CALL(sv, get_session(localhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn2));
 	
 	StrictMock<mock_session> sn3;
-	EXPECT_CALL(sn3, notify
+	EXPECT_CALL(sn3, call
 		("introduce", "k2.22", "k2.5", mockhost3, mockvector3, 1));
 	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
 		.WillRepeatedly(ReturnRef(sn3));
@@ -648,13 +655,13 @@ TEST(_14, introduce_middle_key_to_left){
 		WillByDefault(ReturnRef(sv.invalid_session));
 
 	StrictMock<mock_session> sn1;
-	EXPECT_CALL(sn1, notify
+	EXPECT_CALL(sn1, call
 		("link", "k2.22", 0, "k2.2", localhost));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	
 	StrictMock<mock_session> sn2;
-	EXPECT_CALL(sn2, notify
+	EXPECT_CALL(sn2, call
 		("introduce", "k2.22", "k2", mockhost3, mockvector3, 1));
 	EXPECT_CALL(sv, get_session(mockhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn2));
@@ -663,7 +670,7 @@ TEST(_14, introduce_middle_key_to_left){
 	logic::introduce(&req, &sv);
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
 	}
 }
 
@@ -680,13 +687,13 @@ TEST(_15, introduce_middle_key_to_right){
 
 	StrictMock<mock_server> sv;
 	StrictMock<mock_session> sn1;
-	EXPECT_CALL(sn1, notify
+	EXPECT_CALL(sn1, call
 		("link", "k2.22", 0, "k2.3", localhost));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	
 	StrictMock<mock_session> sn2;
-	EXPECT_CALL(sn2, notify
+	EXPECT_CALL(sn2, call
 		("introduce", "k2.22", "k2.5", mockhost3, mockvector3, 1));
 	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
 		.WillRepeatedly(ReturnRef(sn2));
@@ -695,7 +702,7 @@ TEST(_15, introduce_middle_key_to_right){
 	logic::introduce(&req, &sv);
 	{
 		shared_data::ref_storage st(shared_data::instance().storage);
-		EXPECT_TRUE(st->find("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
+		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]->get_key() == "k2.22");
 	}
 }
 
@@ -717,7 +724,7 @@ TEST(_16, overwrite_old_key_in_other_node){
 
 	StrictMock<mock_session> sn;
 
-	EXPECT_CALL(sn, notify("treat", "k2.22", localhost, localvector));
+	EXPECT_CALL(sn, call("treat", "k2.22", localhost, localvector));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
 	// call
@@ -745,9 +752,9 @@ TEST(_17, more_overwrite_middle_key){
 	StrictMock<mock_server> sv;
 	
 	StrictMock<mock_session> sn;
-	EXPECT_CALL(sn, notify
+	EXPECT_CALL(sn, call
 		("introduce", "k2.22", "k2.2", mockhost3, mockvector3, 0));
-	EXPECT_CALL(sn, notify
+	EXPECT_CALL(sn, call
 		("introduce", "k2.22", "k2.3", mockhost3, mockvector3, 0));
 	EXPECT_CALL(sv, get_session(localhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
@@ -770,7 +777,7 @@ TEST(_18, search__will_find){
 	
 	StrictMock<mock_server> sv;
 	StrictMock<mock_session> sn;
-	EXPECT_CALL(sn, notify
+	EXPECT_CALL(sn, call
 		("found", "k2.2", "v2.2"));
 	EXPECT_CALL(sv, get_session(search_origin.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
@@ -791,7 +798,7 @@ TEST(_18, search__will_relay){
 	
 	StrictMock<mock_server> sv;
 	StrictMock<mock_session> sn;
-	EXPECT_CALL(sn, notify("search", "k2.22", _, search_origin));
+	EXPECT_CALL(sn, call("search", "k2.22", _, search_origin));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
 	
@@ -811,7 +818,7 @@ TEST(_18, search__will_not_found){
 	
 	StrictMock<mock_server> sv;
 	StrictMock<mock_session> sn;
-	EXPECT_CALL(sn, notify("notfound", "hoge"));
+	EXPECT_CALL(sn, call("notfound", "hoge"));
 	EXPECT_CALL(sv, get_session(search_origin.get_address()))
 		.WillRepeatedly(ReturnRef(sn));
 	

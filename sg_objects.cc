@@ -57,7 +57,7 @@ std::vector<size_t> get_hash_of_lock(shared_data::both_side& its){
 	const size_t left = boost::hash_value(its.first->first); 
 	const size_t right = boost::hash_value(its.second->first);
 	std::vector<size_t> v(2);
-	v.push_back(left);v.push_back(right);
+	v[0]=left; v[1]=right;
 	return v;
 }
 
@@ -137,6 +137,7 @@ std::ostream& operator<<(std::ostream& ost, shared_data& s){
 		for(shared_data::storage_t::iterator it = st.begin();
 				it != st.end();
 				++it){
+			if(it == st.begin())continue;
 			//ost << *it  << std::endl;
 		}
 		ost << "]" << std::endl;

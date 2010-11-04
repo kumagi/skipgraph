@@ -1,5 +1,6 @@
 #ifndef STRIPED_SYNC_HPP
 #define STRIPED_SYNC_HPP
+#include <stdio.h>
 #include <vector>
 #include <algorithm>
 #include <boost/thread.hpp>
@@ -50,10 +51,13 @@ public:
 		multi_ref(striped_sync<T,size>& obj, const std::vector<size_t>& hash)
 			:m_hash(hash),m_ref(&obj)
 		{
+			for(size_t i=0;i<m_hash.size();i++){
+				m_hash[i] = m_hash[i] % size;
+			}
 			std::sort(m_hash.begin(),m_hash.end());
 			m_hash.erase(std::unique(m_hash.begin(),m_hash.end()),m_hash.end());
 			for(size_t i=0;i<m_hash.size();i++){
-				obj.m_lock[m_hash[i]%size].lock();
+				obj.m_lock[m_hash[i]].lock();
 			}
 		}
 		~multi_ref(){

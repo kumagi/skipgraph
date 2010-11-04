@@ -108,7 +108,7 @@ int main(int argc, char** argv){
 			.notify("treat",keyname, s.myhost, shared_data::instance().myvector);
 	}
 	
-	std::cout << shared_data::instance() << std::endl;
+	//std::cout << shared_data::instance() << std::endl;
 	
 	
 	sg_server.join();// wait for server ends

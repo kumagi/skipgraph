@@ -86,6 +86,7 @@ struct membership_vector{
 std::ostream&  operator<<(std::ostream& ost, const membership_vector& v);
 
 typedef std::string key;
+typedef boost::hash<key> key_hash;
 typedef std::string value;
 
 static key min_key("0");

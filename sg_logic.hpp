@@ -228,7 +228,7 @@ void treat(request* req, server* sv){
 								, arg.org_key, from_left->get_key()
 								, arg.origin, arg.org_vector,0);
 						for(int i=0;i<link_for;++i){
-						its.first->second.neighbors()[right][i] = newnbr;							
+							its.first->second.neighbors()[right][i] = newnbr;							
 							sv->get_session(arg.origin.get_address())
 								.call("link", arg.org_key, i, its.first->first, localhost);
 						}
@@ -325,7 +325,7 @@ void link(request* req,server* sv){
 	const msg::link arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
 	{
-		//link(link, target_key, level, key, org_key, origin)
+		//link(target_key, level, key, org_key, origin)
 		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
 		shared_data::storage_t::iterator target = st.get(arg.target_key);
 		if(target == st.end()) req->result(false);
@@ -335,7 +335,85 @@ void link(request* req,server* sv){
 			= shared_data::instance().get_neighbor(arg.org_key, arg.origin);
 		target->second.neighbors()[dir][arg.level] = new_nbr;
 	}
+}
+	
+template <typename request, typename server>
+void introduce(request* req, server* sv){
+	msg::introduce arg(req->params());
+	DEBUG(std::cerr << arg << std::endl);
+	{
+		const host& localhost = shared_data::instance().get_host();
+		const membership_vector& localvector = shared_data::instance().myvector;
+		const int& localmaxlevel = shared_data::instance().maxlevel;
+		//introduce(org_key, target_key, origin, org_vector, level)
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
 
+		shared_data::sync_storage_t& sst = shared_data::instance().storage;
+		shared_data::ref_storage locks(sst, key_hash()(arg.target_key));
+		shared_data::storage_t::iterator target = st.get(arg.target_key);
+		if(target == st.end()){ req->result(false); return;}
+		if(arg.org_key == arg.target_key){
+			for(int i=0;i<2;i++){
+				if(target->second.neighbors()[i][0]){
+					const neighbor& nbr = *target->second.neighbors()[i][0];
+					sv->get_session(nbr.get_address())
+						.call("introduce", arg.org_key, nbr.get_key()
+							, localhost, localvector,0);
+				}
+			}
+			req->result(true);
+			return;
+		}
+		const direction dir = get_direction(arg.target_key, arg.org_key);
+		if(target->second.neighbors()[dir][arg.level]){
+			const neighbor& target_point = *target->second.neighbors()[dir][arg.level];
+			if((dir == left && target_point.get_key() < arg.org_key)
+				||(dir == right && target_point.get_key() > arg.org_key)){
+				sv->get_session(target_point.get_address())
+					.call("introduce", arg.org_key, target_point.get_key()
+						, arg.origin, arg.org_vector, arg.level);
+				req->result(false);
+			}
+		}
+		int lv = arg.level;
+		const int link_for 
+			= std::min(localvector.match(arg.org_vector), localmaxlevel-1);
+		DEBUG_OUT("atai[%d]\n", link_for);
+		const shared_neighbor nbr 
+			= shared_data::instance().get_neighbor(arg.org_key, arg.origin);
+		// if(arg.level == 0){
+		// 	target->second.neighbors()[dir][0] = nbr;
+		// 	sv->get_session(arg.origin.get_address())
+		// 		.call("link", arg.org_key, 0, target->first, localhost);
+		// 	lv++;
+		// }
+
+		if(nbr->get_host() == localhost){
+			shared_data::ref_storage locks
+				(shared_data::instance().storage, key_hash()(nbr->get_key()));
+			shared_data::storage_t::iterator org_node = st.get(nbr->get_key());
+			const shared_neighbor target_node
+				= shared_data::instance().get_neighbor(arg.target_key, localhost);
+			for(;lv <= link_for; ++lv){
+				target->second.neighbors()[dir][lv] = nbr;
+				org_node->second.neighbors()[inverse(dir)][lv] = target_node;
+			}
+		}else{
+			for(;lv <= link_for; ++lv){
+				target->second.neighbors()[dir][lv] = nbr;
+				sv->get_session(arg.origin.get_address())
+					.call("link", arg.org_key, lv, target->first, localhost);
+			}
+		}
+		if(target->second.neighbors()[inverse(dir)][arg.level]){
+			const neighbor& inv
+				= *target->second.neighbors()[inverse(dir)][arg.level];
+			sv->get_session(inv.get_address())
+				.call("introduce", arg.org_key, inv.get_key(), 
+					arg.origin, arg.org_vector, link_for);
+		}
+		req->result(true);
+	}
 }
 
 template <typename request, typename server>
@@ -366,14 +444,6 @@ void notfound(request* req, server*){
 }
 
 
-	
-template <typename request, typename server>
-void introduce(request* req, server* sv){
-	msg::introduce arg(req->params());
-	DEBUG(std::cerr << arg << std::endl);
-	{
-	}
-}
 
 }
 #endif
