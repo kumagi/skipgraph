@@ -213,7 +213,6 @@ void treat(request* req, server* sv){
 				st.remove(arg.org_key);
 				return;
 			}else{
-
 				// if near, begin to treat
 				shared_neighbor newnbr = 
 					shared_data::instance().get_neighbor(arg.org_key, arg.origin);
@@ -227,7 +226,7 @@ void treat(request* req, server* sv){
 							.call("introduce"
 								, arg.org_key, from_left->get_key()
 								, arg.origin, arg.org_vector,0);
-						for(int i=0;i<link_for;++i){
+						for(int i=0;i<=link_for;++i){
 							its.first->second.neighbors()[right][i] = newnbr;							
 							sv->get_session(arg.origin.get_address())
 								.call("link", arg.org_key, i, its.first->first, localhost);
@@ -281,7 +280,6 @@ void treat(request* req, server* sv){
 					}
 				}
 
-				
 				// there is no key between locked nodes
 				const int link_for = 
 					std::min(localvector.match(arg.org_vector), localmaxlevel);
@@ -297,7 +295,6 @@ void treat(request* req, server* sv){
 							.call("link", arg.org_key, i, its.second->first, localhost);
 					}
 				}
-				DEBUG_OUT("ohhaa--");
 				if(its.first->second.is_valid()
 					&& its.first->second.neighbors()[left][0]){
 					sv->get_session(its.first->second.neighbors()[left][0]->get_address())
@@ -391,9 +388,10 @@ void introduce(request* req, server* sv){
 		if(nbr->get_host() == localhost){
 			shared_data::ref_storage locks
 				(shared_data::instance().storage, key_hash()(nbr->get_key()));
-			shared_data::storage_t::iterator org_node = st.get(nbr->get_key());
+			shared_data::storage_t::iterator org_node = st.get(arg.org_key);
 			const shared_neighbor target_node
 				= shared_data::instance().get_neighbor(arg.target_key, localhost);
+			DEBUG_OUT("hello");
 			for(;lv <= link_for; ++lv){
 				target->second.neighbors()[dir][lv] = nbr;
 				org_node->second.neighbors()[inverse(dir)][lv] = target_node;

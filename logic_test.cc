@@ -101,7 +101,7 @@ TEST(_0, settings){
 // alias
 const host& localhost(shared_data::instance().get_host());
 const host mockhost("133.21.1.1",11212); //host
-const host mockhost2("213.232.121.12",1443);
+const host mockhost2("213.232.121.12",1443); // k2.5
 const membership_vector mockvector1(2);
 const membership_vector mockvector2(6);
 
@@ -397,7 +397,6 @@ TEST(_8, introduce_key){
 	}
 }
 
-
 TEST(_9, add_more_key){
 	//                 new
 	// k1       k2.2  k2.3         k3
@@ -451,7 +450,6 @@ TEST(_9, add_more_key){
 		EXPECT_TRUE(!st.get("k2.3")->second.neighbors()[right][2]);
 	}
 }
-
 
 TEST(_10, link_to_left_key){
 	//                     link
@@ -549,18 +547,19 @@ TEST(_11, introduce_to_left_key){
 }
 
 TEST(_12, introduce_to_right_key){
-//                       introduce!
-		// k1       k2.2  k2.3         k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
-		// k1  [k2] k2.2  k2.3  [k2.5] k3
+	//                    introduce!
+	// k1       k2.2  k2.3         k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
+	// k1  [k2] k2.2  k2.3  [k2.5] k3
 	
 	// request's input/output
 	eval::object<const key,const key, host, membership_vector, int >
 		obj("k2.3", "k3",
-			localhost, shared_data::instance().myvector, 2);
+				localhost, shared_data::instance().myvector, 1);
 	StrictMock<mock_request> req;
 	EXPECT_CALL(req, params())
 		.WillOnce(ReturnRef(obj.get()));
+	EXPECT_CALL(req, result(true));
 	
 	mock_server sv;
 	
@@ -574,7 +573,7 @@ TEST(_12, introduce_to_right_key){
 		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]);
 		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]);
 		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][0]->get_key() == "k2.5");
-		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.5");
+		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][1]->get_key() == "k2.3");
 		EXPECT_TRUE(st.get("k3")->second.neighbors()[left][2]->get_key() == "k2.3");
 		
 		EXPECT_TRUE(st.get("k2.2")->second.neighbors()[right][0]);
@@ -591,15 +590,14 @@ TEST(_12, introduce_to_right_key){
 		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]);
 		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_key() == "k2.5");
 		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][0]->get_host() == mockhost2);
-		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][1]->get_key() == "k2.5");
-		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][2]->get_key() == "k2.3");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][1]->get_key() == "k3");
+		EXPECT_TRUE(st.get("k2.3")->second.neighbors()[right][2]->get_key() == "k3");
 	}
 }
 
 const host mockhost3("1.2.3.4",121);
 const membership_vector mockvector3(1);
 
-/*
 TEST(_13, more_middle_key){
 		// k1       k2.2           k2.3         k3
 		// k1  [k2] k2.2   new!    k2.3  [k2.5] k3
@@ -618,6 +616,8 @@ TEST(_13, more_middle_key){
 	StrictMock<mock_session> sn1;
 	EXPECT_CALL(sn1, call
 		("link", "k2.22", 0, "k2.3", localhost));
+	EXPECT_CALL(sn1, call
+		("link", "k2.22", 0, "k2.2", localhost));
 	EXPECT_CALL(sv, get_session(mockhost3.get_address()))
 		.WillRepeatedly(ReturnRef(sn1));
 	
@@ -629,14 +629,15 @@ TEST(_13, more_middle_key){
 	
 	StrictMock<mock_session> sn3;
 	EXPECT_CALL(sn3, call
-		("introduce", "k2.22", "k2.5", mockhost3, mockvector3, 1));
-	EXPECT_CALL(sv, get_session(mockhost2.get_address()))
+		("introduce", "k2.22", "k2", mockhost3, mockvector3, 0));
+	EXPECT_CALL(sv, get_session(mockhost.get_address()))
 		.WillRepeatedly(ReturnRef(sn3));
 	
 	// call
 	logic::treat(&req, &sv);
 }
 
+/*
 TEST(_14, introduce_middle_key_to_left){
 		// k1       k2.2           k2.3         k3
 		// k1  [k2] k2.2           k2.3  [k2.5] k3

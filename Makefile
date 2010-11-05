@@ -13,7 +13,7 @@ NOTIFY=&& notify-send Test success! -i ~/themes/ok_icon.png || notify-send Test 
 SRCS=$(HEADS) $(BODYS)
 MSGPACK_RPC_OBJS=$(PATH_MSGPACK_RPC)/*.o
 
-target:skipgraph
+#target:skipgraph
 target:logic_test
 #target:dumpcall
 #target:server

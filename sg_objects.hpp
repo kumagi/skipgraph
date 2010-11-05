@@ -22,7 +22,7 @@
 #include "debug_macro.h"
 #include "msgpack.hpp"
 
-#include "sl/sl.hpp"
+#include "sl.hpp"
 #include "striped_sync.hpp"
 
 enum direction{
