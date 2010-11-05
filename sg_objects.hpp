@@ -119,7 +119,7 @@ public:
 		};
 		};*/
 };
-typedef boost::shared_ptr<neighbor> shared_neighbor;
+typedef boost::shared_ptr<const neighbor> shared_neighbor;
 
 class range{
 	key begin_,end_;

@@ -98,17 +98,17 @@ int main(int argc, char** argv){
 		// treat minimum key
 		std::string keyname = "__node_"+ s.master.hostname + std::string(":") +
 			boost::lexical_cast<std::string>(s.myport);
-
+		
 		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
 		st.add(keyname,
 				sg_node("dummy", shared_data::instance().myvector,
 					shared_data::instance().maxlevel));
-		
+		std::cout << "hellp";
 		sg_server.get_session(s.master.get_address())
 			.notify("treat",keyname, s.myhost, shared_data::instance().myvector);
 	}
 	
-	//std::cout << shared_data::instance() << std::endl;
+	std::cout << shared_data::instance() << std::endl;
 	
 	
 	sg_server.join();// wait for server ends

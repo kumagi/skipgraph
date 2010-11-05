@@ -138,7 +138,7 @@ std::ostream& operator<<(std::ostream& ost, shared_data& s){
 				it != st.end();
 				++it){
 			if(it == st.begin())continue;
-			//ost << *it  << std::endl;
+			ost << it->first << " : " << it->second  << std::endl;
 		}
 		ost << "]" << std::endl;
 	}

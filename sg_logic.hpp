@@ -5,6 +5,7 @@
 #include <map>
 #include <string>
 #include <algorithm>
+#include <boost/functional/hash.hpp>
 
 #define DEBUG_MODE
 #include "debug_macro.h"
@@ -73,8 +74,8 @@ void range_search(request* req, server* sv){
 	BLOCK("search:");
 	msg::range_search arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
-	
-	
+	{
+	}
 }
 
 template <typename request, typename server>
@@ -124,26 +125,26 @@ void set(request* req, server* sv){
 				const neighbor* from_right = its.second->second.neighbors()[left][0].get();
 				if(from_left &&  from_left->get_key() != its.second->first){
 					if(its.first->is_valid()
-						&& from_left && from_left->get_key() > arg.set_key){
+						 && from_left && from_left->get_key() > arg.set_key){
 						DEBUG_OUT("from left %s < %s\n"
-							, arg.set_key.c_str(), from_left->get_key().c_str());
+											, arg.set_key.c_str(), from_left->get_key().c_str());
 						detail::zip_two_node(its.first->first,&its.first->second
-							,arg.set_key,&result->second);
+																 ,arg.set_key,&result->second);
 						sv->get_session(from_left->get_address())
 							.call("introduce"
-								,arg.set_key, from_left->get_key(), localhost, localvector,0);
+										,arg.set_key, from_left->get_key(), localhost, localvector,0);
 						req->result(true);
 						return;
 					}
 					else if(its.second->is_valid() 
-						&& from_right && arg.set_key > from_right->get_key()){
+									&& from_right && arg.set_key > from_right->get_key()){
 						DEBUG_OUT("from right %s > %s"
-							, arg.set_key.c_str(), from_left->get_key().c_str());
+											, arg.set_key.c_str(), from_left->get_key().c_str());
 						detail::zip_two_node(arg.set_key,&result->second
-							,its.first->first,&its.first->second);
+																 ,its.first->first,&its.first->second);
 						sv->get_session(from_left->get_address())
 							.call("introduce",
-								arg.set_key, from_right->get_key(), localhost, localvector,0);
+										arg.set_key, from_right->get_key(), localhost, localvector,0);
 						req->result(true);
 						return;
 					}
@@ -156,17 +157,57 @@ void set(request* req, server* sv){
 						DEBUG_OUT("from left treat");
 						sv->get_session(from_left->get_address())
 							.call("treat", arg.set_key, localhost, localvector);
+						if(from_left->get_key() == arg.set_key){
+							DEBUG_OUT("itti! %s\n", result->first.c_str());
+							const shared_neighbor& left_is 
+								= shared_data::instance()
+								.get_neighbor(its.first->first, localhost);
+							while(i > 0 && its.first->second.neighbors()
+										[right][i]->get_key() == arg.set_key)--i;
+							for(;i<shared_data::instance().maxlevel;++i){
+								its.first->second.neighbors()[right][i] = newnbr;
+								//std::cout << "key" << newnbr->get_key().c_str();
+								result->second.neighbors()[left][i] = left_is;
+								std::cout << "key" << left_is->get_key().c_str();
+							}
+						}
 						req->result(true);
 						return;
 					}else if(from_right && arg.set_key <= from_right->get_key()){
 						DEBUG_OUT("from right treat");
-						sv->get_session(from_left->get_address())
+						const neighbor* from_left = its.first->second.neighbors()[right][i].get();
+						const neighbor* from_right = its.second->second.neighbors()[left][i].get();
+						sv->get_session(from_right->get_address())
 							.call("treat", arg.set_key, localhost, localvector);
-						req->result(true);
-						return;
+						if(from_right->get_key() == arg.set_key){
+							const shared_neighbor& right_is 
+								= shared_data::instance()
+								.get_neighbor(from_right->get_key(), localhost);
+							for(;i<=shared_data::instance().maxlevel-1;++i){
+								its.first->second.neighbors()[right][i] = newnbr;
+								result->second.neighbors()[right][i] = right_is;
+							}
+						}
+						if(from_right->get_key() == arg.set_key){
+							DEBUG_OUT("itti! %d\n", i);
+							const shared_neighbor& right_is 
+								= shared_data::instance()
+								.get_neighbor(its.first->first, localhost);
+							while(i > 0 && its.first->second.neighbors()[right][i] &&
+										its.first->second.neighbors()[right][i]->get_key() 
+										== arg.set_key)--i;
+							for(;i<shared_data::instance().maxlevel;++i){
+								its.first->second.neighbors()[right][i] = newnbr;
+								std::cout << "key" << newnbr->get_key().c_str();
+								result->second.neighbors()[right][i] = right_is;
+								std::cout << "key" << right_is->get_key().c_str();
+							}
+							req->result(true);
+							return;
+						}
 					}
 				}
-			
+				
 				// there is no key between locked nodes
 				for(int i=shared_data::instance().maxlevel-1; i>=0; --i){
 					its.first->second.neighbors()[right][i] = newnbr;
@@ -176,6 +217,7 @@ void set(request* req, server* sv){
 				return;
 			}
 			break;
+			
 		}
 	}
 }
@@ -193,22 +235,42 @@ void treat(request* req, server* sv){
 	
 		while(1){
 			shared_data::both_side its = sst.get_ref().get_pair(arg.org_key);
-			const std::vector<size_t>& vec = get_hash_of_lock(its);
+			std::vector<size_t> vec = get_hash_of_lock(its);
+			vec.push_back(key_hash()(arg.org_key));
 			shared_data::multi_ref_storage locks(sst, vec);// get_locks
 			
 			if(its.first->next[0]->first != its.second->first){continue;}// relock
 			shared_data::storage_t& st = shared_data::instance().storage.get_ref();
-					
-			if(its.first->first == arg.org_key){ // if I have that key
-				const sg_node& target = its.first->second;
-				sv->get_session(target.neighbors()[left][0]->get_address())
-					.call("introduce"
-						, arg.org_key, target.neighbors()[left][0]->get_key()
-						, arg.origin, arg.org_vector,0);
-				sv->get_session(target.neighbors()[right][0]->get_address())
-					.call("introduce"
-						, arg.org_key, target.neighbors()[right][0]->get_key()
-						, arg.origin, arg.org_vector,0);
+
+			if(its.second->first == arg.org_key){ // if I have that key
+				if( its.first->first < arg.org_key 
+					 && its.first->second.neighbors()[right][0]
+					 && its.first->second.neighbors()[right][0]->get_key() 
+					 == its.second->first
+					 && arg.origin == localhost){
+					shared_data::storage_t::iterator rhs = its.second;
+					++rhs;
+					detail::zip_two_node(its.first->first,&its.first->second
+															 ,its.second->first, &its.second->second);
+					detail::zip_two_node(its.second->first,&its.second->second
+															 ,rhs->first, &rhs->second);
+					req->result(true);
+					return;
+				}
+				DEBUG_OUT("I have it!\n");
+				const sg_node& target = its.second->second;
+				if(target.neighbors()[left][0]){
+					sv->get_session(target.neighbors()[left][0]->get_address())
+						.call("introduce"
+									, arg.org_key, target.neighbors()[left][0]->get_key()
+									, arg.origin, arg.org_vector,0);
+				}
+				if(target.neighbors()[right][0]){
+					sv->get_session(target.neighbors()[right][0]->get_address())
+						.call("introduce"
+									, arg.org_key, target.neighbors()[right][0]->get_key()
+									, arg.origin, arg.org_vector,0);
+				}
 				req->result(true);
 				st.remove(arg.org_key);
 				return;
@@ -220,12 +282,12 @@ void treat(request* req, server* sv){
 				const neighbor* from_right = its.second->second.neighbors()[left][0].get();
 				if(from_left && from_left->get_key() != its.second->first){
 					const int link_for = 
-						std::min(localvector.match(arg.org_vector), localmaxlevel);
+						std::min(localvector.match(arg.org_vector), localmaxlevel-1);
 					if(from_left && from_left->get_key() > arg.org_key){
 						sv->get_session(from_left->get_address())
 							.call("introduce"
-								, arg.org_key, from_left->get_key()
-								, arg.origin, arg.org_vector,0);
+										, arg.org_key, from_left->get_key()
+										, arg.origin, arg.org_vector,0);
 						for(int i=0;i<=link_for;++i){
 							its.first->second.neighbors()[right][i] = newnbr;							
 							sv->get_session(arg.origin.get_address())
@@ -235,8 +297,8 @@ void treat(request* req, server* sv){
 							const neighbor& target = *its.first->second.neighbors()[left][0];
 							sv->get_session(target.get_address())
 								.call("introduce"
-									, arg.org_key, target.get_key()
-									, arg.origin, arg.org_vector, link_for);
+											, arg.org_key, target.get_key()
+											, arg.origin, arg.org_vector, link_for);
 						}
 						req->result(true);
 						return;
@@ -244,8 +306,8 @@ void treat(request* req, server* sv){
 					else if(from_right && arg.org_key > from_right->get_key()){
 						sv->get_session(from_right->get_address())
 							.call("introduce"
-								, arg.org_key, from_right->get_key()
-								, arg.origin, arg.org_vector,0);
+										, arg.org_key, from_right->get_key()
+										, arg.origin, arg.org_vector,0);
 						for(int i=0;i<=link_for;++i){
 							its.second->second.neighbors()[left][i] = newnbr;
 							sv->get_session(arg.origin.get_address())
@@ -255,8 +317,8 @@ void treat(request* req, server* sv){
 							const neighbor& target = *its.second->second.neighbors()[right][0];
 							sv->get_session(target.get_address())
 								.call("introduce"
-									, arg.org_key, target.get_key()
-									, arg.origin, arg.org_vector,link_for);
+											, arg.org_key, target.get_key()
+											, arg.origin, arg.org_vector,link_for);
 						}
 						req->result(true);
 						return;
@@ -267,13 +329,13 @@ void treat(request* req, server* sv){
 				for(int i=shared_data::instance().maxlevel-1; i>=0; --i){
 					const neighbor* from_left = its.first->second.neighbors()[right][i].get();
 					const neighbor* from_right = its.second->second.neighbors()[left][i].get();
-					if(from_left && from_left->get_key() <= arg.org_key){
+					if(from_left && from_left->get_key() < arg.org_key){
 						sv->get_session(from_left->get_address())
 							.call("treat", arg.org_key, arg.origin, arg.org_vector);
 						req->result(true);
 						return;
-					}else if(from_right && arg.org_key <= from_right->get_key()){
-						sv->get_session(from_left->get_address())
+					}else if(from_right && arg.org_key < from_right->get_key()){
+						sv->get_session(from_right->get_address())
 							.call("treat", arg.org_key, arg.origin, arg.org_vector);
 						req->result(true);
 						return;
@@ -282,8 +344,23 @@ void treat(request* req, server* sv){
 
 				// there is no key between locked nodes
 				const int link_for = 
-					std::min(localvector.match(arg.org_vector), localmaxlevel);
-				for(int i=0;i<=link_for;++i){
+					std::min(localvector.match(arg.org_vector), localmaxlevel-1);
+				int i=0;
+				if(link_for == 0){
+					if(its.first->second.is_valid()){
+						its.first->second.neighbors()[right][0] = newnbr;
+						sv->get_session(arg.origin.get_address())
+							.call("link", arg.org_key, 0, its.first->first, localhost);
+					}
+					if(its.second->second.is_valid()){
+						its.second->second.neighbors()[left][0] = newnbr;
+						sv->get_session(arg.origin.get_address())
+							.call("link", arg.org_key, 0, its.second->first, localhost);
+					}
+					++i;
+				}
+								
+				for(;i<=link_for;++i){
 					if(its.first->second.is_valid()){
 						its.first->second.neighbors()[right][i] = newnbr;
 						sv->get_session(arg.origin.get_address())
@@ -296,18 +373,18 @@ void treat(request* req, server* sv){
 					}
 				}
 				if(its.first->second.is_valid()
-					&& its.first->second.neighbors()[left][0]){
+					 && its.first->second.neighbors()[left][0]){
 					sv->get_session(its.first->second.neighbors()[left][0]->get_address())
 						.call("introduce"
-							, arg.org_key, its.first->second.neighbors()[left][0]->get_key()
-							, arg.origin, arg.org_vector,0);
+									, arg.org_key, its.first->second.neighbors()[left][0]->get_key()
+									, arg.origin, arg.org_vector,link_for+1);
 				}
 				if(its.second->second.is_valid() 
-					&& its.second->second.neighbors()[right][0]){
+					 && its.second->second.neighbors()[right][0]){
 					sv->get_session(its.second->second.neighbors()[right][0]->get_address())
 						.call("introduce"
-							, arg.org_key, its.second->second.neighbors()[right][0]->get_key()
-							, arg.origin, arg.org_vector,0);
+									, arg.org_key, its.second->second.neighbors()[right][0]->get_key()
+									, arg.origin, arg.org_vector,link_for+1);
 				}
 				req->result(true);			
 			}
@@ -339,12 +416,17 @@ void introduce(request* req, server* sv){
 	msg::introduce arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
 	{
+		if(shared_data::instance().maxlevel <= arg.level){
+			req->result(true);
+			return;
+		}
+		
 		const host& localhost = shared_data::instance().get_host();
 		const membership_vector& localvector = shared_data::instance().myvector;
 		const int& localmaxlevel = shared_data::instance().maxlevel;
 		//introduce(org_key, target_key, origin, org_vector, level)
 		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
-
+		
 		shared_data::sync_storage_t& sst = shared_data::instance().storage;
 		shared_data::ref_storage locks(sst, key_hash()(arg.target_key));
 		shared_data::storage_t::iterator target = st.get(arg.target_key);
@@ -355,7 +437,7 @@ void introduce(request* req, server* sv){
 					const neighbor& nbr = *target->second.neighbors()[i][0];
 					sv->get_session(nbr.get_address())
 						.call("introduce", arg.org_key, nbr.get_key()
-							, localhost, localvector,0);
+									, localhost, localvector,0);
 				}
 			}
 			req->result(true);
@@ -365,10 +447,10 @@ void introduce(request* req, server* sv){
 		if(target->second.neighbors()[dir][arg.level]){
 			const neighbor& target_point = *target->second.neighbors()[dir][arg.level];
 			if((dir == left && target_point.get_key() < arg.org_key)
-				||(dir == right && target_point.get_key() > arg.org_key)){
+				 ||(dir == right && target_point.get_key() > arg.org_key)){
 				sv->get_session(target_point.get_address())
 					.call("introduce", arg.org_key, target_point.get_key()
-						, arg.origin, arg.org_vector, arg.level);
+								, arg.origin, arg.org_vector, arg.level);
 				req->result(false);
 			}
 		}
@@ -408,7 +490,7 @@ void introduce(request* req, server* sv){
 				= *target->second.neighbors()[inverse(dir)][arg.level];
 			sv->get_session(inv.get_address())
 				.call("introduce", arg.org_key, inv.get_key(), 
-					arg.origin, arg.org_vector, link_for);
+							arg.origin, arg.org_vector, link_for+1);
 		}
 		req->result(true);
 	}
@@ -419,8 +501,46 @@ void search(request* req, server* sv){
 	BLOCK("search:");
 	msg::search arg(req->params());
 	DEBUG(std::cerr << arg << std::endl);
-	{
+
+	shared_data::sync_storage_t& sst = shared_data::instance().storage;
+	const host& localhost = shared_data::instance().get_host();
+	const membership_vector& localvector = shared_data::instance().myvector;
+	const int& localmaxlevel = shared_data::instance().maxlevel;
+
+	{//search(target_key, level, origin);
+
+		shared_data::storage_t& st = shared_data::instance().storage.get_ref();
+		shared_data::storage_t::iterator target = st.get(arg.target_key);		
+		//if(!target->second.is_valid()){req->result(false);return;}
+		if(target != st.end()){
+			sv->get_session(arg.origin.get_address())
+				.call("found", target->first, target->second.get_value());
+			req->result(true);
+			return;
+		}else{
+			shared_data::storage_t::iterator near = st.lower_bound(arg.target_key);
+			if(near == st.begin()){++near;}
+			if(near == st.end()){req->result(false);return;}
+			const direction dir = get_direction(near->first, arg.target_key);
+			
+			for(int i=shared_data::instance().maxlevel-1; i>=0; --i){
+				const neighbor* more_near = near->second.neighbors()[dir][i].get();
+				if(more_near
+					 && ((dir == left && more_near->get_key() < arg.target_key)
+							 || 
+							 (dir == right && arg.target_key <= more_near->get_key()))){
+					sv->get_session(more_near->get_address())
+						.call("search", arg.target_key, 10, arg.origin);
+					req->result(true);
+					return;
+				}
+			}
+			req->result(true);
+			sv->get_session(arg.origin.get_address())
+				.call("notfound", arg.target_key);
+		}
 	}
+
 }
 
 template <typename request, typename server>
